@@ -11,26 +11,22 @@ import matplotlib.pyplot as plt
 """
 
 
-def search_checkerboard_size(image: np.ndarray, is_save=False, npz_name="calib.npz"):
-    """
-    코너 좌표와 체커 사이즈를 알려주는 함수
-    for문을 통해 체커보드 이미지의 크기를 추출하고 옵션으로 npz파일을 저장할 수 있습니다.
-    
-    image : 이미지 행렬
+def load_npz(npz_file):
+    with np.load(npz_file) as X:
+        mtx, dist, _, _ = [X[i] for i in ("mtx", "dist", "rvecs", "tvecs")]
+    return mtx, dist
 
-    # 출력
-    refined_corners : 코너 점들 좌표 
-    checker_sizes : tuple - ex) (3, 4)
-    """
+
+def search_checkerboard_size(image: np.ndarray, mtx: np.ndarray, dist: np.ndarray):
     image = image.copy()
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
     objpoints = []
     imgpoints = []
     checker_sizes = []
-    for i in range(3, 8):
+    for i in range(6, 7):
         a = 0
-        for j in range(3, i + 1):
+        for j in range(4, 5):
             ret, corners = cv2.findChessboardCorners(gray, (i, j), None)
             if ret == True:
                 objp = np.zeros((i * j, 3), np.float32)
@@ -49,17 +45,8 @@ def search_checkerboard_size(image: np.ndarray, is_save=False, npz_name="calib.n
                 img = cv2.drawChessboardCorners(image, (i, j), refined_corners, ret)
 
                 break
-
-    if is_save == True:
-        ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
-            objpoints, imgpoints, gray.shape[::-1], None, None
-        )
-        np.savez(npz_name, ret=ret, mtx=mtx, dist=dist, rvecs=rvecs, tvecs=tvecs)
-
-    print(
-        f"Calc. is done! the checkerboard size is {checker_sizes[-1][0]} x {checker_sizes[-1][1]}"
-    )
-    return refined_corners, checker_sizes[-1]
+    ret, rvecs, tvecs = cv2.solvePnP(objp, refined_corners, mtx, dist)
+    return checker_sizes[-1], refined_corners, rvecs, tvecs
 
 
 def outer_pts(points: np.ndarray, size: tuple) -> np.ndarray:
@@ -114,6 +101,7 @@ def euclidean_distance(point1: list, point2: list) -> float:
 
 def transform_coordinate(trans_coor: np.array, point: list) -> list:
     """
+    좌표를 바꾸고자 하는 변환 행렬을 통과시켜주는 함수
     trans_coor : 변환 행렬 (3X3) - np.array
     point : 변환하고자 하는 좌표 - ex) [300, 500]
     result : 변환된 좌표
@@ -141,13 +129,12 @@ def transform_coordinate(trans_coor: np.array, point: list) -> list:
     # 3 row -> 3 col
     after = after.reshape(-1)  # wx`, wy`, w
     # w로 나눠준다 -> x`, y`
-    result = [(after[0] // after[2]), (after[1] // after[2])]
+    result = [(after[0] / after[2]), (after[1] / after[2])]
 
     return result
 
 
 # 4개가 정사각형이라는 전제 하에서 작성한 함수
-# 만약 4좌표의 간격이 (4, 3) 이면 다른 방식으로 작성해야함
 def trans_checker_stand_coor(point: list, stand_corr: tuple) -> list:
     """
     ** 수정 필요 **
@@ -164,10 +151,15 @@ def trans_checker_stand_coor(point: list, stand_corr: tuple) -> list:
     pts2 = trans_checker_stand_coor(pts1, (w, h * 2))
     """
 
-    ucl = euclidean_distance(point[0], point[2])
+    # x, y 비율과 똑같이 ar 이미지에 투시한다.
+    # 첫번째 좌표를 기준으로 오른쪽에서 x, 아래쪽 좌표에서 y 간격(비율)을 구해준다.
+    x_ucl = abs(point[0][0] - point[2][0])
+    y_ucl = abs(point[0][1] - point[1][1])
 
     w, h = stand_corr
-    result = np.float32([[w, h], [w, h + ucl], [w + ucl, h], [w + ucl, h + ucl],])
+    result = np.float32(
+        [[w, h], [w, h + y_ucl], [w + x_ucl, h], [w + x_ucl, h + y_ucl],]
+    )
 
     return result
 
@@ -278,7 +270,7 @@ def make_cheker_points(
     # 정방향 좌표를 다시 원래 이미지 좌표로 바꿔준다.
     for point in ar_points_xy:
         new_p = transform_coordinate(re_M, point)
-        if new_p[0] > 0 and new_p[0] <w and new_p[1] >0 and new_p[1] <h:
+        if new_p[0] > 0 and new_p[0] < w and new_p[1] > 0 and new_p[1] < h:
             result.append(new_p)
 
     return ar_points_xy, result
@@ -410,8 +402,10 @@ def measure_width_height(
     # # print()
     # print(pts2)
 
-    # pt2[0]의 x축과 pt2[2]의 x축의 필셀 거리 // 3(칸) = 1칸당 떨어진 픽셀거리
-    one_checker_per_pix_dis = abs(re_point[0][0] - re_point[2][0]) / checker_size[0]
+    # pt2[0]의 x축과 pt2[2]의 x축의 필셀 거리 // 코너 사이즈 - 1 (칸) = 1칸당 떨어진 픽셀거리
+    one_checker_per_pix_dis = abs(re_point[0][0] - re_point[2][0]) / (
+        checker_size[0] - 1
+    )
 
     # 픽셀당 실제 거리 - check_real_dist(cm) / 1칸당 떨어진 픽셀 거리
     pix_per_real_dist = check_real_dist / one_checker_per_pix_dis
@@ -446,3 +440,36 @@ def draw(img, corners, imgpts):
     )
     return img
 
+
+def pixel_coordinates(
+    camera_mtx: np.ndarray, rvecs: np.ndarray, tvecs: np.ndarray, real_coor: tuple
+) -> np.ndarray:
+    """
+    camera_mtx: npz에 있는 mtx
+    rvecs: rotation 변환 행렬
+    tvecs: translation 변환 행렬
+    real_coor: 현실 좌표계의 좌표
+    반환값인 pixel_coor: 이미지상에서의 좌표
+    """
+
+    # Rodgigues notation으로 된 회전변환 행렬을 3x3 회전변환 행렬로 변환
+    rotation_mtx = cv2.Rodrigues(rvecs)
+
+    translation_mtx = tvecs
+
+    # np.hstack으로 회전변환과 병진변환 행렬을 합쳐 [R|t]행렬 생성
+    # Rodrigues()를 쓰면 0번째로 회전변환 행렬, 1번째로 변환에 사용한 Jacobian행렬이 나오므로 0번째만 사용
+    R_t = np.hstack((rotation_mtx[0], translation_mtx))
+
+    # 실제 좌표를 3x1행렬로 변환
+    real_coor = np.array(real_coor).reshape(-1, 1)
+
+    # 실제 좌표 마지막 행에 1을 추가
+    real_coor = np.vstack((real_coor, np.array([1])))
+
+    # 이미지 좌표계에서의 픽셀 좌표 연산
+    pixel_coor = camera_mtx @ R_t @ real_coor
+
+    # 마지막 행을 1로 맞추기 위해 마지막 요소값으로 각 요소를 나눔
+    pixel_coor /= pixel_coor[-1]
+    return pixel_coor
