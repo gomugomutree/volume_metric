@@ -212,12 +212,13 @@ def make_cheker_points(
 
     # 4 사분면
     while start_y < (h * 3):
-        if start_x < (w * 3) :
+        if start_x < (w * 3):
             new_point = [
                 start_x,
                 start_y,
             ]
-            ar_points_xy.append(new_point)
+            if new_point not in ar_points_xy:
+                ar_points_xy.append(new_point)
             start_x += term
         else:
             start_x = ar_points_x[0][0]
@@ -232,7 +233,8 @@ def make_cheker_points(
                 start_x,
                 start_y,
             ]
-            ar_points_xy.append(new_point)
+            if new_point not in ar_points_xy:
+                ar_points_xy.append(new_point)
             start_x -= term
         else:
             start_x = ar_points_x[0][0]
@@ -246,7 +248,8 @@ def make_cheker_points(
                 start_x,
                 start_y,
             ]
-            ar_points_xy.append(new_point)
+            if new_point not in ar_points_xy:
+                ar_points_xy.append(new_point)
             start_x -= term
         else:
             start_x = ar_points_x[0][0]
@@ -261,7 +264,8 @@ def make_cheker_points(
                 start_x,
                 start_y,
             ]
-            ar_points_xy.append(new_point)
+            if new_point not in ar_points_xy:
+                ar_points_xy.append(new_point)
         else:
             start_x = ar_points_x[0][0]
             start_y -= term
@@ -273,7 +277,9 @@ def make_cheker_points(
 
     # 정방향 좌표를 다시 원래 이미지 좌표로 바꿔준다.
     for point in ar_points_xy:
-        result.append(transform_coordinate(re_M, point))
+        new_p = transform_coordinate(re_M, point)
+        if new_p[0] > 0 and new_p[0] <w and new_p[1] >0 and new_p[1] <h:
+            result.append(new_p)
 
     return ar_points_xy, result
 
@@ -425,3 +431,18 @@ def measure_width_height(
         print("세로길이 :", height)
 
     return [width, height]
+
+
+def draw(img, corners, imgpts):
+    corner = tuple([int(corners.ravel()[0]), int(corners.ravel()[1])])
+    img = cv2.line(
+        img, corner, tuple(list(map(int, imgpts[0].ravel()))), (255, 0, 0), 5
+    )
+    img = cv2.line(
+        img, corner, tuple(list(map(int, imgpts[1].ravel()))), (0, 255, 0), 5
+    )
+    img = cv2.line(
+        img, corner, tuple(list(map(int, imgpts[2].ravel()))), (0, 0, 255), 5
+    )
+    return img
+
