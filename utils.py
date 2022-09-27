@@ -366,7 +366,7 @@ def make_cube_axis(checker_num: int, checker_size: tuple, cube_size: tuple) -> l
     return axis, axisCube
 
 
-def measure_width_height(
+def measure_width_vertical(
     checker_points: list,
     object_points: list,
     check_real_dist: int,
@@ -417,7 +417,7 @@ def measure_width_height(
     width = (
         euclidean_distance(re_object_points[1], re_object_points[2]) * pix_per_real_dist
     )
-    height = (
+    vertical = (
         euclidean_distance(re_object_points[2], re_object_points[3]) * pix_per_real_dist
     )
 
@@ -425,9 +425,9 @@ def measure_width_height(
         print("1칸당 픽셀거리 :", one_checker_per_pix_dis)
         print("픽셀당 실제 거리 :", pix_per_real_dist)
         print("가로길이 :", width)
-        print("세로길이 :", height)
+        print("세로길이 :", vertical)
 
-    return [width, height]
+    return [width, vertical]
 
 
 def draw(img, corners, imgpts):
@@ -476,3 +476,83 @@ def pixel_coordinates(
     # 마지막 행을 1로 맞추기 위해 마지막 요소값으로 각 요소를 나눔
     pixel_coor /= pixel_coor[-1]
     return pixel_coor
+
+def find_vertex(image: np.array) -> list:
+    '''
+    물체 꼭지점 6좌표 추출하는 함수
+    iamge : 꼭지점을 찾을 이미지
+
+    output -> vertex_resize : 꼭지점 좌표가 6개인 물체들의 좌표 리스트
+    '''
+
+    # h, w = image.shape[:2]
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (3, 3), 0)   # (1, 1)을 홀수값 쌍으로 바꿀수 있음 3,3 5,5 7,7.... 조절해가며 contours 상자를 맞춰감
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    dilate = cv2.erode(blurred, kernel, iterations =2)
+
+    # Find contours
+    contours, _ = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE) # contours는 튜플로 묶인 3차원 array로 출력
+    # print(len(contours))
+
+    # Make a mask image
+    # mask = np.zeros(image.shape).astype(image.dtype)
+    # color = [255,255,255]
+    # filled_image = cv2.fillPoly(mask, contours, color)
+
+    # vertex 출력값 그려보기
+    vertex_list = list()
+    for cnt in contours:
+        for eps in np.arange(0.001, 0.2, 0.001):
+            length = cv2.arcLength(cnt, True)
+            epsilon = eps * length
+            vertex = cv2.approxPolyDP(cnt, epsilon, True)
+            if len(vertex) == 6 and length > 1000:      # vertex가 6 -> 꼭짓점의 갯수
+                # cv2.drawContours(filled_image,[vertex],0,(0,0,255),10)
+                vertex_list.append(vertex)
+                break
+
+    vertex_resize = np.reshape(vertex_list, (-1, 6, 2))
+
+    return vertex_resize
+
+def fix_vertex(contours: np.array)-> list:
+    '''
+    꼭지점 좌표들을 원하는 순서대로 정렬해주는 함수
+    contours : 정렬되지 않은 6개의 꼭지점 좌표
+    output -> contours : 정렬된 좌표
+    예시)
+    vertexes = utils.find_vertex(re_bg)
+    object_vertexes =  utils.find_object_vertex(vertexes)
+    object_vertexes = utils.fix_vertex(object_vertexes)
+    '''
+    # 최소 y좌표
+    y_coors = np.min(contours, axis=0)[1]
+    # print("y_coor", y_coors)
+    # 좌상단 좌표가 index 0 번 -> 반시계 방향으로 좌표가 돌아간다.
+    contours = contours.tolist()
+    while y_coors != contours[-1][1]:
+        temp = contours.pop(0)
+        contours.append(temp)
+    return contours
+
+def find_object_vertex(vertexes:list, pts1: list) -> list:
+    """
+    꼭지점 좌표들 중 체커보드가 포함된 좌표들을 제거하는 함수
+    vertexes : 좌표들의 리스트
+    pts1 : 체커 포인트 최외곽 좌표 (4개)
+    예시)
+    vertexes = utils.find_vertex(re_bg)
+    object_vertexes =  find_object_vertex(vertexes)
+    """
+    for vertex in vertexes:
+        x_min, y_min = np.min(vertex, axis=0)
+        x_max, y_max = np.max(vertex, axis=0)
+
+        if not ((x_min < pts1[1][0] < x_max) and (y_min < pts1[1][1] < y_max)):
+            vertexes = vertex
+            break
+    # print("vertex", vertex)
+    return vertex
