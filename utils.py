@@ -18,20 +18,19 @@ def load_npz(npz_file):
 
 
 def search_checkerboard_size(image: np.ndarray, mtx: np.ndarray, dist: np.ndarray):
-    image = image.copy()
+    # image = image.copy()
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
     objpoints = []
     imgpoints = []
     checker_sizes = []
-    for i in range(6, 7):
+    for i in range(7, 2, -1):
         a = 0
-        for j in range(4, 5):
+        for j in range(7, 2, -1):
             ret, corners = cv2.findChessboardCorners(gray, (i, j), None)
             if ret == True:
                 objp = np.zeros((i * j, 3), np.float32)
                 objp[:, :2] = np.mgrid[0:i, 0:j].T.reshape(-1, 2)
-                a = 1
                 objpoints.append(objp)
                 check_size = (i, j)
                 checker_sizes.append(check_size)
@@ -43,8 +42,12 @@ def search_checkerboard_size(image: np.ndarray, mtx: np.ndarray, dist: np.ndarra
                 imgpoints.append(refined_corners)
 
                 img = cv2.drawChessboardCorners(image, (i, j), refined_corners, ret)
-
+                a = 1
+                
+                print("corner is detected!!")
                 break
+        if a == 1:
+            break
     ret, rvecs, tvecs = cv2.solvePnP(objp, refined_corners, mtx, dist)
     return checker_sizes[-1], refined_corners, rvecs, tvecs
 
