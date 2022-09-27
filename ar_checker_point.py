@@ -4,15 +4,17 @@ import glob, cv2
 from matplotlib import pyplot as plt
 import utils
 
+
 ###### 객체
 img = cv2.imread("img5.jpg")
 h, w = img.shape[:2]
 image = img.copy()
 
+
 # npz 파일 받아오기
 npz_file = "calibration3.npz"
 
-# 카메라 계수, 왜곡 계수
+# 카메라 계수, 왜곡 계수 -> 카메라 고정값
 mtx, dist = utils.load_npz(npz_file)
 
 # 코너 사이즈, 보정 코너들, 회전 벡터, 변환 벡터
@@ -54,7 +56,7 @@ ar_second = utils.transform_coordinate(M, pts1[2])
 ar_object_standard_z = utils.transform_coordinate(M, big_pai[1])
 
 # 두 점을 1으로 나눈 거리를 1로 기준
-standard_ar_dist = abs(ar_start[0] - ar_second[0]) / checker_sizes[0]  # (몇바이, 몇)
+standard_ar_dist = abs(ar_start[0] - ar_second[0]) / (checker_sizes[0] - 1)  # (몇바이, 몇)
 
 # x, y, z 값을 갖는다
 ar_object_real_coor = [
@@ -62,26 +64,10 @@ ar_object_real_coor = [
     (ar_object_standard_z[1] - ar_start[1]) / standard_ar_dist,
     0,
 ]
-
+[0, 1, 0]
 z = utils.pixel_coordinates(mtx, rvecs, tvecs, ar_object_real_coor)
 
-# ######
-
-# for i in np.arange(0, 2, 0.2):
-#     z = utils.pixel_coordinates(mtx, rvecs, tvecs, (0, 0, -i))
-#     img = cv2.circle(img, tuple(list(map(int, z[:2]))), 5, (0, 0, 255), -1, cv2.LINE_AA)
-# img = cv2.resize(img, (w // 4, h // 4))
-
-# cv2.imshow("img", img)
-# cv2.waitKey()
-# cv2.destroyAllWindows()
-# exit()
-
-# ########
-
-
 image = cv2.warpPerspective(img, M, (w * 3, h * 3))
-
 
 result_z = 0
 for i in np.arange(0, 10, 0.01):
@@ -94,15 +80,10 @@ for i in np.arange(0, 10, 0.01):
 
     img = cv2.circle(img, tuple(list(map(int, z[:2]))), 5, (0, 0, 255), -1, cv2.LINE_AA)
 
-
-# img = cv2.circle(
-#     img, tuple(list(map(int, big_pai[1]))), 30, (0, 0, 255), -1, cv2.LINE_AA
-# )
-
 # 그리기
-# image = cv2.circle(
-#     image, tuple(list(map(int, ar_object_standard_z))), 30, (0, 0, 255), -1, cv2.LINE_AA
-# )
+image = cv2.circle(
+    image, tuple(list(map(int, ar_object_standard_z))), 10, (0, 0, 255), -1, cv2.LINE_AA
+)
 font = cv2.FONT_HERSHEY_SIMPLEX
 point = tuple(map(int, (ar_object_standard_z[0] + 100, ar_object_standard_z[1] - 100)))
 
