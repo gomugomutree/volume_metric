@@ -108,22 +108,10 @@ def transform_coordinate(trans_coor: np.array, point: list) -> list:
     trans_coor : 변환 행렬 (3X3) - np.array
     point : 변환하고자 하는 좌표 - ex) [300, 500]
     result : 변환된 좌표
-
-    - 실행 예제 -
-    img = cv2.imread("checker1.jpg")
-    pts1 = np.float32([[931, 1411], [1101, 2033], [1667, 1189], [2045, 1706]])
-    h, w = img.shape[:2]
-    ucl = euclidean_distance(pts1[0], pts1[2])
-    pts2 = trans_checker_stand_coor(pts1, (w, h * 2))
-    M = cv2.getPerspectiveTransform(pts1, pts2)
-    point = [931, 1411]
-    re_point = transform_coordinate(M, point)
-    print(pts2)
-    pirnt(point)
     """
-
     # 2 col -> 3 col -> 3 row 1 col
     re_point = point.copy()
+    print("re_point",type(re_point))
     re_point.append(1)
     re_point = np.array(re_point).reshape(3, -1).tolist()
 
@@ -137,7 +125,6 @@ def transform_coordinate(trans_coor: np.array, point: list) -> list:
     return result
 
 
-# 4개가 정사각형이라는 전제 하에서 작성한 함수
 def trans_checker_stand_coor(point: list, stand_corr: tuple, checker_size: tuple) -> list:
     """
     ** 수정 필요 **
