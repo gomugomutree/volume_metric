@@ -21,7 +21,6 @@ def search_checkerboard_size(image: np.ndarray, mtx: np.ndarray, dist: np.ndarra
     # image = image.copy()
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-    objpoints = []
     imgpoints = []
     checker_sizes = []
     for i in range(7, 2, -1):
@@ -31,7 +30,6 @@ def search_checkerboard_size(image: np.ndarray, mtx: np.ndarray, dist: np.ndarra
             if ret == True:
                 objp = np.zeros((i * j, 3), np.float32)
                 objp[:, :2] = np.mgrid[0:i, 0:j].T.reshape(-1, 2)
-                objpoints.append(objp)
                 check_size = (i, j)
                 checker_sizes.append(check_size)
                 print(checker_sizes)
@@ -138,7 +136,7 @@ def transform_coordinate(trans_coor: np.array, point: list) -> list:
 
 
 # 4개가 정사각형이라는 전제 하에서 작성한 함수
-def trans_checker_stand_coor(point: list, stand_corr: tuple) -> list:
+def trans_checker_stand_coor(point: list, stand_corr: tuple, checker_size: tuple) -> list:
     """
     ** 수정 필요 **
     이미지상의 4개의 좌표를 일정한 간격으로 펴서 4개의 좌표로 만들어주는 함수
@@ -156,12 +154,17 @@ def trans_checker_stand_coor(point: list, stand_corr: tuple) -> list:
 
     # x, y 비율과 똑같이 ar 이미지에 투시한다.
     # 첫번째 좌표를 기준으로 오른쪽에서 x, 아래쪽 좌표에서 y 간격(비율)을 구해준다.
-    x_ucl = abs(point[0][0] - point[2][0])
-    y_ucl = abs(point[0][1] - point[1][1])
+    # 1칸당 거리 구하기
+    one_step = abs(point[0][0] - point[2][0]) / (checker_size[0] - 1)
+
+    # y_ucl = abs(point[0][1] - point[1][1])
 
     w, h = stand_corr
     result = np.float32(
-        [[w, h], [w, h + y_ucl], [w + x_ucl, h], [w + x_ucl, h + y_ucl],]
+        [[w, h], 
+        [w, h + one_step * (checker_size[1] - 1)], 
+        [w + one_step * ((checker_size[0] - 1)), h], 
+        [w + one_step * ((checker_size[0] - 1)), h + one_step * (checker_size[1] - 1)],]
     )
 
     return result
@@ -395,16 +398,6 @@ def measure_width_vertical(
     for point in object_points:
         re_object_points.append(transform_coordinate(mat, point))
 
-    # ####  re_point 대신 pts2 로 계산할 경우 #####
-    # 원래는 두 값이 똑같아야 하지만 소수점 이하로 다른 값이 나온다
-    # img = cv2.imread("img5.jpg")
-    # h, w = img.shape[:2]
-
-    # pts2 = trans_checker_stand_coor(pts1, (w, h))
-    # print(re_point)
-    # # print()
-    # print(pts2)
-
     # pt2[0]의 x축과 pt2[2]의 x축의 필셀 거리 // 코너 사이즈 - 1 (칸) = 1칸당 떨어진 픽셀거리
     one_checker_per_pix_dis = abs(re_point[0][0] - re_point[2][0]) / (
         checker_size[0] - 1
@@ -475,7 +468,7 @@ def pixel_coordinates(
 
     # 마지막 행을 1로 맞추기 위해 마지막 요소값으로 각 요소를 나눔
     pixel_coor /= pixel_coor[-1]
-    return pixel_coor
+    return pixel_coor[:2]
 
 def find_vertex(image: np.array) -> list:
     '''
@@ -556,3 +549,4 @@ def find_object_vertex(vertexes:list, pts1: list) -> list:
             break
     # print("vertex", vertex)
     return vertex
+

@@ -1,10 +1,9 @@
-import atexit
-from turtle import ycor
 import numpy as np
 import glob, cv2
 from matplotlib import pyplot as plt
 import utils
 from rembg import remove
+
 """
 빅파이 21 15 4.5
 밀크카라멜 7.2  4.5 2
@@ -17,6 +16,7 @@ from rembg import remove
 와클 15 4.8 9.5
 포켓몬 볼 7(지름)
 """
+
 def measure_height(img: np.array, pts1: np.array, object_vertexes: np.array, checker_sizes: tuple, mat: np.array, mtx: np.array, rvecs: np.array, tvecs: np.array) -> int:
 
     pts1 = pts1.tolist()
@@ -25,10 +25,10 @@ def measure_height(img: np.array, pts1: np.array, object_vertexes: np.array, che
 
     ar_object_standard_z = utils.transform_coordinate(mat, object_vertexes[1])
 
-
-    # 두 점을 1으로 나눈 거리를 1로 기준
-    standard_ar_dist = abs(ar_start[0] - ar_second[0]) / (checker_sizes[0] - 1)  # (몇바이, 몇)
-
+    # 두 점을 1으로 나눈 거리를 1칸 기준 (ckecker 사이즈에서 1 빼면 칸수)
+    standard_ar_dist = abs(ar_start[0] - ar_second[0]) / (checker_sizes[0] - 1)  
+    
+    # 실제세계의 기준 좌표를 기준으로 물체의 z축을 구할 바닥 좌표의 실제세계의 좌표를 구한다
     # x, y, z 값을 갖는다
     ar_object_real_coor = [
         (ar_object_standard_z[0] - ar_start[0]) / standard_ar_dist,
@@ -36,9 +36,11 @@ def measure_height(img: np.array, pts1: np.array, object_vertexes: np.array, che
         0,
     ]
 
+    # pixel_coordinates 
     z_coordinate = utils.pixel_coordinates(mtx, rvecs, tvecs, ar_object_real_coor)
-
+    # print("z축 기본 좌표 :", z_coordinate)
     real_z = 0
+    # y축으로 비교해서 z 수치가 증가하다가 물체 높이보다 높아지면 break
     for i in np.arange(0, 10, 0.01):
         if (z_coordinate[1] - object_vertexes[0][1]) < 0:
             break
@@ -48,12 +50,10 @@ def measure_height(img: np.array, pts1: np.array, object_vertexes: np.array, che
         real_z = i
 
         img = cv2.circle(img, tuple(list(map(int, z_coordinate[:2]))), 5, (0, 0, 255), -1, cv2.LINE_AA)
-
     return z_coordinate, real_z, ar_object_standard_z
 
 
-
-img = cv2.imread("img15.jpg")
+img = cv2.imread("img8.jpg")
 h, w = img.shape[:2]
 
 image = img.copy()
@@ -84,12 +84,13 @@ object_vertexes =  utils.find_object_vertex(vertexes, pts1)
 
 # 물체의 꼭지점들을 정렬
 object_vertexes = utils.fix_vertex(object_vertexes)
-
+print("오젝트 Z축 기본 좌표 :", object_vertexes[1])
+print("오젝트 Z축 만나는 좌표 :", object_vertexes[0])
 print("꼭지점 get")
 
 # 체커보드 4개의 좌표를 기준으로 변환 좌표를 구한다
 pts2 = utils.trans_checker_stand_coor(
-    pts1, (w, h * 2)
+    pts1, (w, h * 2), checker_sizes
 )  # pts1의 x축 좌표간의 간격을 나머지 4개의 좌표를 구해준다.
 
 # 투시 행렬 구하기
@@ -101,15 +102,20 @@ width, vertical = utils.measure_width_vertical(pts1, object_vertexes, 4, M, chec
 # 높이 구하기 함수
 z_coordinate, real_z, ar_object_standard_z = measure_height(img, pts1, object_vertexes, checker_sizes, M, mtx, rvecs, tvecs)
 
-# 그리기
-image = cv2.circle(
-    image, tuple(list(map(int, ar_object_standard_z))), 10, (0, 0, 255), -1, cv2.LINE_AA
-)
+# # 그리기
+# image = cv2.circle(
+#     image, tuple(list(map(int, ar_object_standard_z))), 10, (0, 0, 255), -1, cv2.LINE_AA
+# )
+
 font = cv2.FONT_HERSHEY_SIMPLEX
 point = tuple(map(int, (ar_object_standard_z[0] + 100, ar_object_standard_z[1] - 100)))
 
 # 높이 좌표랑 만나는 z 좌표
 # cv2.putText(img, f"{z_coordinate}", (400, 400), font, 5, (0, 255, 0), 10)
+# img = cv2.circle(
+#     img, tuple(map(int, z_coordinate[:2])), 10, (0, 0, 0), -1, cv2.LINE_AA
+# )
+
 # 가로, 세로, 높이 출력
 print("가로길이 :",width)
 print("세로길이 :",vertical)
