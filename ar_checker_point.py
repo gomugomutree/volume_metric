@@ -53,7 +53,7 @@ def measure_height(img: np.array, pts1: np.array, object_vertexes: np.array, che
     return z_coordinate, real_z, ar_object_standard_z
 
 
-img = cv2.imread("img8.jpg")
+img = cv2.imread("img5.jpg")
 h, w = img.shape[:2]
 
 image = img.copy()
@@ -76,16 +76,20 @@ checker_sizes, refined_corners, rvecs, tvecs = utils.search_checkerboard_size(
 # 체커 보드 탐색 4개 좌표
 pts1 = utils.outer_pts(refined_corners, checker_sizes)
 
+# k_mean k=4 로 해서 이미지 전처리 
+k_mean_img = utils.find_object_by_k_mean(re_bg, visualize_object=True)
+
 # 물체 탐색 후 외곽 6개 좌표들의 list
-vertexes = utils.find_vertex(re_bg)
+vertexes = utils.find_vertex(k_mean_img)
+print(vertexes)
 
 # 체커보드 좌표가 들어있는 물체 좌표를 삭제
 object_vertexes =  utils.find_object_vertex(vertexes, pts1)
 
 # 물체의 꼭지점들을 정렬
 object_vertexes = utils.fix_vertex(object_vertexes)
-print("오젝트 Z축 기본 좌표 :", object_vertexes[1])
-print("오젝트 Z축 만나는 좌표 :", object_vertexes[0])
+# print("오젝트 Z축 기본 좌표 :", object_vertexes[1])
+# print("오젝트 Z축 만나는 좌표 :", object_vertexes[0])
 print("꼭지점 get")
 
 # 체커보드 4개의 좌표를 기준으로 변환 좌표를 구한다
@@ -102,19 +106,8 @@ width, vertical = utils.measure_width_vertical(pts1, object_vertexes, 4, M, chec
 # 높이 구하기 함수
 z_coordinate, real_z, ar_object_standard_z = measure_height(img, pts1, object_vertexes, checker_sizes, M, mtx, rvecs, tvecs)
 
-# # 그리기
-# image = cv2.circle(
-#     image, tuple(list(map(int, ar_object_standard_z))), 10, (0, 0, 255), -1, cv2.LINE_AA
-# )
-
 font = cv2.FONT_HERSHEY_SIMPLEX
 point = tuple(map(int, (ar_object_standard_z[0] + 100, ar_object_standard_z[1] - 100)))
-
-# 높이 좌표랑 만나는 z 좌표
-# cv2.putText(img, f"{z_coordinate}", (400, 400), font, 5, (0, 255, 0), 10)
-# img = cv2.circle(
-#     img, tuple(map(int, z_coordinate[:2])), 10, (0, 0, 0), -1, cv2.LINE_AA
-# )
 
 # 가로, 세로, 높이 출력
 print("가로길이 :",width)
@@ -127,23 +120,7 @@ cv2.line(img,(object_vertexes[1]), (object_vertexes[2]), (0, 255, 0), 5, cv2.LIN
 cv2.line(img,(object_vertexes[2]), (object_vertexes[3]), (255, 0, 0), 5, cv2.LINE_AA)
 
 img = cv2.resize(img, (w // 4, h // 4))
-# image = cv2.resize(image, (w // 3, h // 3))
-# cv2.imshow("image", image)
 
 cv2.imshow("img", img)
 cv2.waitKey()
 cv2.destroyAllWindows()
-
-
-
-
-
-# ar 화면쪽에서 체커 포인트 0, 2번 좌표들
-# for idx, p in enumerate([ar_start, ar_second]):
-#     image = cv2.circle(
-#         image, tuple(list(map(int, p))), 30, (255, 0, 0), -1, cv2.LINE_AA
-#     )
-#     font = cv2.FONT_HERSHEY_SIMPLEX
-#     point = tuple(map(int, (p[0], p[1] - 20)))
-#     # print(point)
-#     cv2.putText(image, f"{idx}", point, font, 10, (255, 0, 0), 10)

@@ -24,7 +24,7 @@ def search_checkerboard_size(image: np.ndarray, mtx: np.ndarray, dist: np.ndarra
     imgpoints = []
     checker_sizes = []
     for i in range(7, 2, -1):
-        a = 0
+        check_int = 0
         for j in range(7, 2, -1):
             ret, corners = cv2.findChessboardCorners(gray, (i, j), None)
             if ret == True:
@@ -39,13 +39,15 @@ def search_checkerboard_size(image: np.ndarray, mtx: np.ndarray, dist: np.ndarra
                 )
                 imgpoints.append(refined_corners)
 
-                img = cv2.drawChessboardCorners(image, (i, j), refined_corners, ret)
-                a = 1
+                # img = cv2.drawChessboardCorners(image, (i, j), refined_corners, ret)
+                check_int = 1
                 
                 print("corner is detected!!")
                 break
-        if a == 1:
+        if check_int == 1:
             break
+    if check_int == 0:
+        return print("corner is not detected......")
     ret, rvecs, tvecs = cv2.solvePnP(objp, refined_corners, mtx, dist)
     return checker_sizes[-1], refined_corners, rvecs, tvecs
 
@@ -486,6 +488,7 @@ def find_vertex(image: np.array) -> list:
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
     dilate = cv2.erode(blurred, kernel, iterations =2)
 
+
     # Find contours
     contours, _ = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE) # contours는 튜플로 묶인 3차원 array로 출력
     # print(len(contours))
@@ -550,3 +553,31 @@ def find_object_vertex(vertexes:list, pts1: list) -> list:
     # print("vertex", vertex)
     return vertex
 
+
+def find_object_by_k_mean(image : np.array, K=4, visualize_object=False):
+    """
+    배경제거된 이미지에서 물체의 그림자 등을 제거하는 이미지 전처리 과정 함수
+    image : image matrix
+    K : k mean cluster 개수
+    visualize_object : 시각화 여부
+    """
+
+    img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    twoDimage = img.reshape((-1,3))
+    twoDimage = np.float32(twoDimage)
+
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+    attempts=10
+
+    ret,label,center=cv2.kmeans(twoDimage,K,None,criteria,attempts,cv2.KMEANS_PP_CENTERS)
+    center = np.uint8(center)
+
+    res = center[label.flatten()]
+    result_image = res.reshape((img.shape))
+    
+    if visualize_object:
+        result_img = cv2.resize(result_image, (800, 800))
+        cv2.imshow("img", result_img)
+        cv2.waitKey(0)
+
+    return result_image 
