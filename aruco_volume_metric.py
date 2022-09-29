@@ -48,9 +48,24 @@ class volumetric:
         self.re_bg_img = remove(self.img)
 
     # 코너 사이즈, 보정 코너들, 회전 벡터, 변환 벡터
-    
-    def search_checkerboard_size(self): # image: np.ndarray, self.camera_matrix, dist: np.ndarray):
-        gray = cv2.cvtColor(self.re_bg_img, cv2.COLOR_BGR2GRAY)
+
+    def findArucoMarkers(img, markerSize = 6, totalMarkers=250, draw=True):
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        key = getattr(aruco, f'DICT_{markerSize}X{markerSize}_{totalMarkers}')
+        arucoDict = aruco.Dictionary_get(key)
+        arucoParam = aruco.DetectorParameters_create()
+        bboxs, ids, rejected = aruco.detectMarkers(gray, arucoDict, parameters = arucoParam)
+        # print(ids)
+        if draw:
+            aruco.drawDetectedMarkers(img, bboxs)
+
+        return [bboxs, ids]
+
+    def search_aruco(self):
+
+        arucofound = findArucoMarkers(self.img)
+
+        gray = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
         imgpoints = []
         for i in range(7, 2, -1):
@@ -311,6 +326,7 @@ class volumetric:
         
         # 실제세계의 기준 좌표를 기준으로 물체의 z축을 구할 바닥 좌표의 실제세계의 좌표를 구한다
         # x, y, z 값을 갖는다
+        #
         ar_object_real_coor = [
             (ar_object_standard_z[0] - ar_start[0]) / standard_ar_dist,
             (ar_object_standard_z[1] - ar_start[1]) / standard_ar_dist,
