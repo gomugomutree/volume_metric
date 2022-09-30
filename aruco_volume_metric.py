@@ -6,6 +6,18 @@ from rembg import remove
 import cv2.aruco as aruco
 import pickle
 
+
+
+# conda install numpy 
+# conda install rembg=2.0.25 
+# conda install opencv-contrib-python=4.6.0.66
+# conda install opencv-python=4.6.0.66 
+
+# # opencv-contrib-python        4.6.0.66
+# # opencv-python                4.6.0.66
+# # opencv-python-headless       4.6.0.66
+# # Python 3.9.13
+
 class aruco_volumetric:
     
     def __init__(self, image_address: str, calibration_file_path: str, aruco_dict=aruco.DICT_6X6_1000, n_cluster=4, markerLength=1, aruco_real_size=10):
@@ -22,6 +34,7 @@ class aruco_volumetric:
         self.camera_matrix = np.array
         self.dist = np.array
         self.tvecs = np.array
+        self.rvecs = np.array
         
         self.re_bg_img = np.array # 
         self.refined_corners = np.array # 
@@ -40,41 +53,47 @@ class aruco_volumetric:
 
         self.height_pixel = np.array
     
-    def set_calib_file(self):
-        # if self.calibration_file_path.endswith('.npz'):
-        #     with np.load(self.calibration_file_path) as X:
-        #         self.camera_matrix, self.dist, _, _ = [X[i] for i in ('mtx', 'dist', 'rvecs', 'tvecs')]
-        #     print('The npz file is loaded')
+    def find_ArucoMarkers(self):
+        ARUCO_DICT = aruco.Dictionary_get(self.aruco_dict)
+        ARUCO_PARAMETERS = aruco.DetectorParameters_create()
 
-        # elif self.calibration_file_path.endswith('.pckl'):
-        with open(self.calibration_file_path, 'rb') as f:
-            data = pickle.load(f)
-            self.camera_matrix, self.dist, _, _ = data
-        #     print('The pickle file is loaded')
-            
-        # else:
-        #     print('Need to calibrate')
 
+        # Creating a theoretical board we'll use to calculate marker positions
+        board = aruco.GridBoard_create(
+            markersX=1,
+            markersY=1,
+            markerLength=1,
+            markerSeparation=0.001,
+            dictionary=ARUCO_DICT,)
+
+        gray = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
+
+
+        #ARUCO_DICT = aruco.Dictionary_get(aruco.DICT_6X6_1000) original
+        corners, _, _ = aruco.detectMarkers(gray, ARUCO_DICT, parameters=ARUCO_PARAMETERS)
+
+        # print(corners)
+        _, self.camera_matrix, self.dist, _, _ = cv2.calibrateCamera(
+        objectPoints=board.objPoints,
+        imagePoints=corners,
+        imageSize=gray.shape, #[::-1], # may instead want to use gray.size
+        cameraMatrix=None,
+        distCoeffs=None)
+
+        self.refined_corners = corners
+
+        self.rvecs, self.tvecs, _objPoints = aruco.estimatePoseSingleMarkers(corners, self.markerLength, self.camera_matrix, self.dist) # solvePnP  
+            ############
+        self.refined_corners = corners
+        self.rvecs = np.array(self.rvecs)
+        self.tvecs = np.array(self.tvecs)
+#########################
 
     # 배경 제거
     def remove_background(self):
         self.re_bg_img = remove(self.img)
 
     
-    def find_ArucoMarkers(self): 
-        gray = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
-
-        ARUCO_PARAMETERS = aruco.DetectorParameters_create()
-
-        #ARUCO_DICT = aruco.Dictionary_get(aruco.DICT_6X6_1000) original
-        ARUCO_DICT = aruco.Dictionary_get(self.aruco_dict)
-        corners, _, _ = aruco.detectMarkers(gray, ARUCO_DICT, parameters=ARUCO_PARAMETERS)
-        print(corners)
-
-        self.refined_corners = corners
-
-        self.rvecs, self.tvecs, _objPoints = aruco.estimatePoseSingleMarkers(corners, self.markerLength, self.camera_matrix, self.dist) # solvePnP                                       
-
     def find_aruco_corner(self, printer=False)-> np.array: #points: np.ndarray, size: tuple) -> np.ndarray:
         """
         points: cv2.cornerSubPix()에 의해 생성된 점들
@@ -272,7 +291,7 @@ class aruco_volumetric:
         one_checker_per_pix_dis = abs(re_point[0][0] - re_point[2][0])
 
         # 픽셀당 실제 거리 - aruco_real_dist(cm) / 1칸당 떨어진 픽셀 거리
-        pix_per_real_dist = self.aruco_real_dist / one_checker_per_pix_dis
+        pix_per_real_dist = self.aruco_real_size / one_checker_per_pix_dis
 
         # 두 점 사이의 픽셀거리 * 1픽셀당 실제 거리 = 두 점의 실제 거리
         self.width = (
@@ -313,13 +332,13 @@ class aruco_volumetric:
             -1 *(ar_object_standard_z[1] - self.center[1]) / standard_ar_dist,
             0,
         ]
-        print("ar_object_real_coor :", ar_object_real_coor)
+        # print("ar_object_real_coor :", ar_object_real_coor)
  
         self.rvecs = self.rvecs.reshape(3, 1) # (1, 1, 3) -> (3, 1)
         self.tvecs = self.tvecs.reshape(3, 1) # (1, 1, 3) -> (3, 1)
 
         height_pixel = utils.pixel_coordinates(self.camera_matrix, self.rvecs, self.tvecs, ar_object_real_coor)
-        
+        self.img = cv2.circle(self.img, tuple(list(map(int, height_pixel[:2]))), 7, (0, 0, 255), -1, cv2.LINE_AA)
         for i in np.arange(0, 20, 0.01):
             if (height_pixel[1] - self.object_vertexes[0][1]) < 0:
                 break
@@ -327,6 +346,7 @@ class aruco_volumetric:
             height_pixel = utils.pixel_coordinates(
                 self.camera_matrix, self.rvecs, self.tvecs, (ar_object_real_coor[0], ar_object_real_coor[1], i)
             )
+
             self.height = i
             if printer:
                 self.img = cv2.circle(self.img, tuple(list(map(int, height_pixel[:2]))), 3, (255, 0, 255), -1, cv2.LINE_AA)
@@ -361,24 +381,32 @@ class aruco_volumetric:
         cv2.destroyAllWindows()
 
 
-def main(image, npz, real_dist):
-    a = aruco_volumetric(image, npz, real_dist)
-    a.set_calib_file()
+def main(image, npz ):
+    a = aruco_volumetric(image, npz )
+    # a.set_calib_file()
+    # a.make_calib()
     a.find_ArucoMarkers()
     a.find_aruco_corner()
     a.remove_background()
 
+    # a.show_image(a.re_bg_img)
+
     a.find_object_by_k_mean()
+    # a.show_image(a.object_detected_img)
     a.find_vertex()
     a.find_object_vertex(printer=True)
     a.fix_vertex()
+
     a.trans_checker_stand_coor()
     a.set_transform_matrix()
     a.measure_width_vertical()
     a.measure_height(printer=True)
     a.draw_image()
 
-# for i in range(24, 25):
-main(f"./aruco_image/aruco_img10.jpg", "aruco_calibration.pckl", 1)
-
-
+for i in range(1, 13):
+    try:
+        print(f"./aruco_image/hexagon_image{i}.jpg")
+        main(f"./aruco_image/hexagon_image{i}.jpg", "aruco_calibration.pckl")
+    except:
+        pass
+# main(f"./aruco_image/hexagon_image7.jpg", "aruco_calibration.pckl")
