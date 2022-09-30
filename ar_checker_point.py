@@ -317,12 +317,16 @@ class volumetric:
             0,
         ]
 
+        ################
+        print(self.camera_matrix.shape, self.rvecs.shape, self.tvecs.shape, ar_object_real_coor.shape)    
+
         # pixel_coordinates 
         height_pixel = utils.pixel_coordinates(self.camera_matrix, self.rvecs, self.tvecs, ar_object_real_coor)
         # y축으로 비교해서 z 수치가 증가하다가 물체 높이보다 높아지면 break
         for i in np.arange(0, 10, 0.01):
             if (height_pixel[1] - self.object_vertexes[0][1]) < 0:
                 break
+
             height_pixel = utils.pixel_coordinates(
                 self.camera_matrix, self.rvecs, self.tvecs, (ar_object_real_coor[0], ar_object_real_coor[1], -i)
             )

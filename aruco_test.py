@@ -4,7 +4,36 @@ import cv2.aruco as aruco
 import os
 import pickle
 
-# Check for camera calibration data
+# rotate a markers corners by rvec and translate by tvec if given input is the size of a marker.
+# In the markerworld the 4 markercorners are at (x,y) = (+- markersize/2, +- markersize/2)
+# returns the rotated and translated corners to camera world and the rotation matrix
+def rotate_marker_corners(rvec, markersize, tvec = None):
+
+    mhalf = markersize / 2.0
+    # convert rot vector to rot matrix both do: markerworld -> cam-world
+    mrv, jacobian = cv2.Rodrigues(rvec)
+
+    #in markerworld the corners are all in the xy-plane so z is zero at first
+    X = mhalf * mrv[:,0] #rotate the x = mhalf
+    Y = mhalf * mrv[:,1] #rotate the y = mhalf
+    minusX = X * (-1)
+    minusY = Y * (-1)
+
+    # calculate 4 corners of the marker in camworld. corners are enumerated clockwise
+    markercorners = []
+    markercorners.append(minusX + Y) #was upper left in markerworld
+    markercorners.append(X + Y) #was upper right in markerworld
+    markercorners.append(X + minusY) #was lower right in markerworld
+    markercorners.append(minusX + minusY) #was lower left in markerworld
+    # if tvec given, move all by tvec
+    if tvec is not None:
+        C = tvec #center of marker in camworld
+        for i, mc in enumerate(markercorners):
+            markercorners[i] = C + mc #add tvec to each corner
+
+    markercorners = np.array(markercorners,dtype=np.float32) # type needed when used as input to cv2
+    return markercorners, mrv
+
 
 # with np.load("cap_calibration.npz") as X:
 #     print(X)
@@ -55,18 +84,29 @@ while(cam.isOpened()):
                 distCoeffs = distCoeffs)   
 
         # print('corners', corners)
-        QueryImg = aruco.drawDetectedMarkers(QueryImg, corners, borderColor=(0, 0, 255))
+        # QueryImg = aruco.drawDetectedMarkers(QueryImg, corners, borderColor=(0, 0, 255))
         
 
     if ids is not None:
-        # try:
+        try:
             rvec, tvec, _objPoints = aruco.estimatePoseSingleMarkers(corners, 0.09, cameraMatrix, distCoeffs) # solvePnP                                       
-            QueryImg = aruco.drawAxis(QueryImg, cameraMatrix, distCoeffs, rvec, tvec, 5)
+            # QueryImg = aruco.drawAxis(QueryImg, cameraMatrix, distCoeffs, rvec, tvec, 0.09)
 
-        # except:
-            print("Deu merda segue o baile")
+            cornerCoordinates, _ = rotate_marker_corners(rvec, 0.09, tvec)
+            reducedDimensionsto2D, _ = cv2.projectPoints(cornerCoordinates, rvec, tvec, cameraMatrix, distCoeffs)
+            reducedDimensionsto2D = np.int32(reducedDimensionsto2D).reshape(-1, 2) # reshape list for better readability
+            print(reducedDimensionsto2D) # debugging
+            print("a")
 
-            cv2.imshow('QueryImage', QueryImg)
+            # Draw square of projected points on the livestream for debugging
+            QueryImg =cv2.polylines(QueryImg, [np.int32(reducedDimensionsto2D)], True, (0, 0, 0), 10)
+        
+        except:
+            # print("Deu merda segue o baile")
+            pass
+
+        cv2.imshow('QueryImage', QueryImg)
+        cv2.waitKey(0)
 
     # Exit at the end of the video on the 'q' keypress
     if cv2.waitKey(1) & 0xFF == ord('q'):
