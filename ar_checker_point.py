@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 import utils
 
 from rembg import remove
-
+import cv2.aruco as aruco
 
 class volumetric:
     
@@ -318,7 +318,7 @@ class volumetric:
         ]
 
         ################
-        print(self.camera_matrix.shape, self.rvecs.shape, self.tvecs.shape, ar_object_real_coor.shape)    
+        # print(self.camera_matrix.shape, self.rvecs.shape, self.tvecs.shape)    
 
         # pixel_coordinates 
         height_pixel = utils.pixel_coordinates(self.camera_matrix, self.rvecs, self.tvecs, ar_object_real_coor)
