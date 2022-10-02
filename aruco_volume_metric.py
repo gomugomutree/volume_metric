@@ -6,21 +6,15 @@ from rembg import remove
 import cv2.aruco as aruco
 import pickle
 
-
-
-# conda install numpy 
-# conda install rembg=2.0.25 
-# conda install opencv-contrib-python=4.6.0.66
-# conda install opencv-python=4.6.0.66 
-
 # # opencv-contrib-python        4.6.0.66
 # # opencv-python                4.6.0.66
 # # opencv-python-headless       4.6.0.66
-# # Python 3.9.13
+# # Python                       3.9.13
+# # rembg                        2.0.25 
 
 class aruco_volumetric:
     
-    def __init__(self, image_address: str, calibration_file_path: str, aruco_dict=aruco.DICT_6X6_1000, n_cluster=4, markerLength=1, aruco_real_size=10):
+    def __init__(self, image_address: str, aruco_dict=aruco.DICT_6X6_1000, n_cluster=4, markerLength=1, aruco_real_size=10):
 
         self.img = cv2.imread(image_address)
         self.aruco_dict = aruco_dict # aruco.DICT_6X6_1000
@@ -30,7 +24,6 @@ class aruco_volumetric:
         self.h = self.img.shape[0]
         self.w = self.img.shape[1]
 
-        self.calibration_file_path = calibration_file_path
         self.camera_matrix = np.array
         self.dist = np.array
         self.tvecs = np.array
@@ -62,8 +55,8 @@ class aruco_volumetric:
         board = aruco.GridBoard_create(
             markersX=1,
             markersY=1,
-            markerLength=1,
-            markerSeparation=0.001,
+            markerLength=self.markerLength,
+            markerSeparation=0.01,
             dictionary=ARUCO_DICT,)
 
         gray = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
@@ -80,8 +73,10 @@ class aruco_volumetric:
         cameraMatrix=None,
         distCoeffs=None)
 
-        self.refined_corners = corners
+        # _, a, b, c, d = aruco.calibrateCameraAruco(corners=corners, ids=1, counter=4, board=board, imageSize=gray.shape, cameraMatrix=self.camera_matrix, distCoeffs=self.dist)
+        # print(a, b, c, d)
 
+        self.refined_corners = corners
         self.rvecs, self.tvecs, _objPoints = aruco.estimatePoseSingleMarkers(corners, self.markerLength, self.camera_matrix, self.dist) # solvePnP  
             ############
         self.refined_corners = corners
@@ -95,10 +90,7 @@ class aruco_volumetric:
 
     
     def find_aruco_corner(self, printer=False)-> np.array: #points: np.ndarray, size: tuple) -> np.ndarray:
-        """
-        points: cv2.cornerSubPix()에 의해 생성된 점들
-        size: 체스판의 크기
-        """
+
         corners = self.refined_corners
         
         self.outer_points1 =  np.array(corners).reshape(-1, 2)
@@ -381,20 +373,16 @@ class aruco_volumetric:
         cv2.destroyAllWindows()
 
 
-def main(image, npz ):
-    a = aruco_volumetric(image, npz )
-    # a.set_calib_file()
-    # a.make_calib()
+def main(image, markerLength, aruco_real_size ):
+    a = aruco_volumetric(image, markerLength=markerLength, aruco_real_size=aruco_real_size)
     a.find_ArucoMarkers()
     a.find_aruco_corner()
     a.remove_background()
-
     # a.show_image(a.re_bg_img)
-
     a.find_object_by_k_mean()
     # a.show_image(a.object_detected_img)
     a.find_vertex()
-    a.find_object_vertex(printer=True)
+    a.find_object_vertex()
     a.fix_vertex()
 
     a.trans_checker_stand_coor()
@@ -404,9 +392,10 @@ def main(image, npz ):
     a.draw_image()
 
 for i in range(1, 13):
-    try:
-        print(f"./aruco_image/hexagon_image{i}.jpg")
-        main(f"./aruco_image/hexagon_image{i}.jpg", "aruco_calibration.pckl")
-    except:
-        pass
+    # try:
+    print(f"./aruco_image/hexagon_image{i}.jpg")
+    main(f"./aruco_image/hexagon_image{i}.jpg", markerLength=0.1, aruco_real_size=10)
+    # except:
+        # pass
 # main(f"./aruco_image/hexagon_image7.jpg", "aruco_calibration.pckl")
+# main(f"./aruco_image/hexagon_image1.jpg", "aruco_calibration.pckl", markerLength=1, aruco_real_size=10)

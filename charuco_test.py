@@ -2,26 +2,30 @@ import numpy as np
 import glob, cv2
 from matplotlib import pyplot as plt
 import utils
+import cv2.aruco as aruco
 
 from rembg import remove
 
 class volumetric:
     
-    def __init__(self, image_address: str, npz_file: str, check_real_dist: int, n_cluster=4):
+    def __init__(self, image_address: str, aruco_dict=aruco.DICT_4X4_1000, n_cluster=4, markerLength=0.03, aruco_real_size=3):
 
         self.img = cv2.imread(image_address)
-        self.check_real_dist = check_real_dist
-
+        self.aruco_dict = aruco_dict # aruco.DICT_6X6_1000
+        self.markerLength= markerLength 
+        self.aruco_real_size = aruco_real_size # (cm)
+        
         self.h = self.img.shape[0]
         self.w = self.img.shape[1]
 
-        self.npz_file = npz_file
         self.camera_matrix = np.array
         self.dist = np.array
         self.tvecs = np.array
+        self.rvecs = np.array
+        
         self.re_bg_img = np.array # 
         self.refined_corners = np.array # 
-        self.checker_sizes = tuple()
+
         self.outer_points1 = np.array
         self.outer_points2 = np.array
         self.K = n_cluster
@@ -39,43 +43,61 @@ class volumetric:
     def set_image(self, image_address: str):
         self.img = cv2.imread(image_address)
     
-    def set_npz(self):
-        with np.load(self.npz_file) as X:
-            self.camera_matrix, self.dist, _, _ = [X[i] for i in ('mtx', 'dist', 'rvecs', 'tvecs')]
-    # 배경 제거
+
     def remove_background(self):
         self.re_bg_img = remove(self.img)
 
     # 코너 사이즈, 보정 코너들, 회전 벡터, 변환 벡터
+    def find_ArucoMarkers(self):
+        ARUCO_DICT = aruco.Dictionary_get(self.aruco_dict)
+        ARUCO_PARAMETERS = aruco.DetectorParameters_create()
+
+
+        # Creating a theoretical board we'll use to calculate marker positions
+        board = aruco.GridBoard_create(
+            markersX=2,
+            markersY=2,
+            markerLength=self.markerLength,
+            markerSeparation=self.markerLength,
+            dictionary=ARUCO_DICT,)
+
+        gray = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
+        # aruco corner detecting
+        corners, ids, _ = aruco.detectMarkers(gray, ARUCO_DICT, parameters=ARUCO_PARAMETERS)
+
+        # aruco의 모든 코너를 찾았을때
+        print("corners, ids", corners, ids)
+        if len(corners) == len(ids):
+            # 카메라 행렬과 왜곡계수 구하기
+            ret, self.camera_matrix, self.dist, _, _ = cv2.calibrateCamera(
+            objectPoints=board.objPoints,
+            imagePoints=corners,
+            imageSize=gray.shape, #[::-1], # may instead want to use gray.size
+            cameraMatrix=None,
+            distCoeffs=None)
+            corners = [arr.tolist() for arr in corners]
+            corners = np.array(corners).reshape(-1, 1, 2)
+
+            if ret:
+                # aruco 코너들로 체커보드 코너를 대체한다.
+                criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+                objp = np.zeros((3 * 3, 3), np.float32)
+                self.refined_corners = cv2.cornerSubPix(
+                                gray, corners, (11, 11), (-1, -1), criteria
+                            )
+
+                _, self.rvecs, self.tvecs = cv2.solvePnP(objp, self.refined_corners, self.camera_matrix, self.dist)
+            else:
+                print(" do not find ")
+
+                ############
+            # self.rvecs = np.array(self.rvecs)
+            # self.tvecs = np.array(self.tvecs)
+        else:
+            print("do not find all corners....")
+            quit()
+#########################
     
-    def search_checkerboard_size(self): # image: np.ndarray, self.camera_matrix, dist: np.ndarray):
-        gray = cv2.cvtColor(self.re_bg_img, cv2.COLOR_BGR2GRAY)
-        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-        for i in range(7, 2, -1):
-            check_int = 0
-            for j in range(7, 2, -1):
-                ret, corners = cv2.findChessboardCorners(gray, (i, j), None)
-                if ret == True:
-                    objp = np.zeros((i * j, 3), np.float32)
-                    objp[:, :2] = np.mgrid[0:i, 0:j].T.reshape(-1, 2)
-                    self.checker_sizes = (i, j)
-                    print(self.checker_sizes)
-
-                    self.refined_corners = cv2.cornerSubPix(
-                        gray, corners, (11, 11), (-1, -1), criteria
-                    )
-
-                    # img = cv2.drawChessboardCorners(image, (i, j), refined_corners, ret)
-                    check_int = 1
-                    print(self.refined_corners, self.refined_corners.shape, type(self.refined_corners))
-                    print("corner is detected!!")
-                    break
-            if check_int == 1:
-                break
-        if check_int == 0:
-            return print("corner is not detected......")
-        ret, self.rvecs, self.tvecs = cv2.solvePnP(objp, self.refined_corners, self.camera_matrix, self.dist)
-
 
     def find_checker_outer_points(self, printer=False): #points: np.ndarray, size: tuple) -> np.ndarray:
         """
@@ -360,12 +382,11 @@ class volumetric:
         cv2.destroyAllWindows()
 
 
-def main(image, npz, real_dist):
-    a = volumetric(image, npz, real_dist)
-    a.set_npz()
+def main(image, markerLength):
+    a = volumetric(image, markerLength=markerLength)
+    a.find_ArucoMarkers()
     a.remove_background()
     # a.show_image(a.re_bg_img)
-    a.search_checkerboard_size()
     a.find_checker_outer_points()
     a.find_object_by_k_mean()
     a.find_vertex()
@@ -377,6 +398,6 @@ def main(image, npz, real_dist):
     a.measure_height(printer=True)
     a.draw_image()
 
-for i in range(24, 25):
-    main(f"./image/img{i}.jpg", "calibration3.npz", 4)
+for i in range(1, 9):
+    main(f"./charuco_image/hexagon_image{i}.jpg", markerLength=0.03 )
 
