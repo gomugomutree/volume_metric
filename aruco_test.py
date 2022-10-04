@@ -16,7 +16,7 @@ ARUCO_PARAMETERS = aruco.DetectorParameters_create()
 ARUCO_DICT = aruco.Dictionary_get(aruco.DICT_4X4_1000)
 
 board = aruco.GridBoard_create(
-        markersX=3,
+        markersX=3, 
         markersY=3,
         markerLength=0.04,
         markerSeparation=0.04,

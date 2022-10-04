@@ -76,6 +76,8 @@ class volumetric:
             return print("corner is not detected......")
         ret, self.rvecs, self.tvecs = cv2.solvePnP(objp, self.refined_corners, self.camera_matrix, self.dist)
 
+        print(self.rvecs, self.tvecs)
+
 
     def find_checker_outer_points(self, printer=False): #points: np.ndarray, size: tuple) -> np.ndarray:
         """
@@ -99,9 +101,6 @@ class volumetric:
                 points[(size[0] * (size[1] - 1)) + (size[0] - 1)][0],
             ]
         )
-
-        
-
 
 
     def find_object_by_k_mean(self, visualize_object=False):
@@ -394,6 +393,7 @@ def main(image, npz, real_dist):
     a.measure_width_vertical()
     a.measure_height(printer=True)
     a.draw_image()
+
 
 for i in range(4, 5):
     main(f"./image/img{i}.jpg", "calibration3.npz", 4)

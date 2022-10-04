@@ -56,7 +56,7 @@ class aruco_volumetric:
             markersX=1,
             markersY=1,
             markerLength=self.markerLength,
-            markerSeparation=0.01,
+            markerSeparation=0.1,
             dictionary=ARUCO_DICT,)
 
         gray = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
@@ -394,7 +394,7 @@ def main(image, markerLength, aruco_real_size ):
 for i in range(1, 13):
     # try:
     print(f"./aruco_image/hexagon_image{i}.jpg")
-    main(f"./aruco_image/hexagon_image{i}.jpg", markerLength=0.1, aruco_real_size=10)
+    main(f"./aruco_image/hexagon_image{i}.jpg", markerLength=1, aruco_real_size=10)
     # except:
         # pass
 # main(f"./aruco_image/hexagon_image7.jpg", "aruco_calibration.pckl")
