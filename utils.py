@@ -48,7 +48,7 @@ def transform_coordinate(trans_coor: np.array, point: list) -> list:
     # 2 col -> 3 col -> 3 row 1 col
     re_point = point.copy()
     re_point.append(1)
-    re_point = np.array(re_point).reshape(3, -1).tolist()
+    # re_point = np.array(re_point).reshape(3, -1).tolist()
 
     after = trans_coor @ re_point
 

@@ -100,6 +100,10 @@ class volumetric:
             ]
         )
 
+        
+
+
+
     def find_object_by_k_mean(self, visualize_object=False):
         """
         배경제거된 이미지에서 물체의 그림자 등을 제거하는 이미지 전처리 과정 함수
@@ -233,10 +237,24 @@ class volumetric:
             [w + one_step * ((self.checker_sizes[0] - 1)), h], 
             [w + one_step * ((self.checker_sizes[0] - 1)), h + one_step * (self.checker_sizes[1] - 1)],]
         )
+        ###############
 
+        # 좌표를 펴서 정방향 이미지 좌표로 만든것
+
+        M = cv2.getPerspectiveTransform(self.outer_points1, self.outer_points2)
+
+        perspective_image = cv2.warpPerspective(self.img, M, (w * 3, h * 3))
+        
+        perspective_image = cv2.resize(perspective_image, (w // 4, h // 4))
+        cv2.imshow("perspective_image", perspective_image)
+        cv2.waitKey()
+        cv2.destroyAllWindows()
+
+######################
     # 투시 행렬 구하기
     def set_transform_matrix(self):
         self.transform_matrix = cv2.getPerspectiveTransform(self.outer_points1, self.outer_points2)
+     
 
     def measure_width_vertical(self, printer=False):
     #     checker_points: list,
@@ -377,6 +395,6 @@ def main(image, npz, real_dist):
     a.measure_height(printer=True)
     a.draw_image()
 
-for i in range(24, 25):
+for i in range(4, 5):
     main(f"./image/img{i}.jpg", "calibration3.npz", 4)
 

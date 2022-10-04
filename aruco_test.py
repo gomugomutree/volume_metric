@@ -16,8 +16,8 @@ ARUCO_PARAMETERS = aruco.DetectorParameters_create()
 ARUCO_DICT = aruco.Dictionary_get(aruco.DICT_4X4_1000)
 
 board = aruco.GridBoard_create(
-        markersX=2,
-        markersY=2,
+        markersX=3,
+        markersY=3,
         markerLength=0.04,
         markerSeparation=0.04,
         dictionary=ARUCO_DICT)
@@ -26,7 +26,7 @@ board = aruco.GridBoard_create(
 
 # cam = cv2.VideoCapture(0)
 
-for i in range(1, 9):
+for i in range(1 , 13):
     QueryImg = cv2.imread(f"./charuco_image/hexagon_image{i}.jpg")
 # while(cam.isOpened()):
     # Capturing each frame of our video stream
@@ -43,6 +43,7 @@ for i in range(1, 9):
     if ids is not None:
         try:
             # print(corners)
+            print(ids)
             _, camera_matrix, dist, rvecs, tvecs = cv2.calibrateCamera(
             objectPoints=board.objPoints,
             imagePoints=corners,

@@ -8,7 +8,7 @@ from rembg import remove
 
 class volumetric:
     
-    def __init__(self, image_address: str, aruco_dict=aruco.DICT_4X4_1000, n_cluster=4, markerLength=0.03, aruco_real_size=3):
+    def __init__(self, image_address: str, aruco_dict=aruco.DICT_6X6_1000, n_cluster=4, markerLength=0.03, aruco_real_size=3):
 
         self.img = cv2.imread(image_address)
         self.aruco_dict = aruco_dict # aruco.DICT_6X6_1000
@@ -39,7 +39,7 @@ class volumetric:
         self.height = 0.0
 
         self.height_pixel = np.array
-
+        self.pix_per_real_dist = float
     def set_image(self, image_address: str):
         self.img = cv2.imread(image_address)
     
@@ -63,39 +63,66 @@ class volumetric:
 
         gray = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
         # aruco corner detecting
-        corners, ids, _ = aruco.detectMarkers(gray, ARUCO_DICT, parameters=ARUCO_PARAMETERS)
+        corners, ids, rejectedImgPoints = aruco.detectMarkers(gray, ARUCO_DICT, parameters=ARUCO_PARAMETERS)
 
-        # aruco의 모든 코너를 찾았을때
-        print("corners, ids", corners, ids)
-        if len(corners) == len(ids):
-            # 카메라 행렬과 왜곡계수 구하기
-            ret, self.camera_matrix, self.dist, _, _ = cv2.calibrateCamera(
+        ret, self.camera_matrix, self.dist, _, _ = cv2.calibrateCamera(
             objectPoints=board.objPoints,
             imagePoints=corners,
             imageSize=gray.shape, #[::-1], # may instead want to use gray.size
             cameraMatrix=None,
             distCoeffs=None)
-            corners = [arr.tolist() for arr in corners]
-            corners = np.array(corners).reshape(-1, 1, 2)
 
+    
+        corners, ids, rejectedImgPoints, _ = aruco.refineDetectedMarkers(
+            image = gray,
+            board = board,
+            detectedCorners = corners,
+            detectedIds = ids,
+            rejectedCorners = rejectedImgPoints,
+            cameraMatrix = self.camera_matrix,
+            distCoeffs = self.dist)  
+        
+        # aruco의 모든 코너를 찾았을때
+        print("corners, ids", corners, ids)
+
+
+        if len(corners) == len(ids):
+            # 카메라 행렬과 왜곡계수 구하기
             if ret:
+                corners = [arr.tolist() for arr in corners]
+                corners = np.array(corners).reshape(-1, 1, 2) # (24, 1, 2)
+                corners = corners.astype('float32')
+
                 # aruco 코너들로 체커보드 코너를 대체한다.
                 criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-                objp = np.zeros((3 * 3, 3), np.float32)
+                objp = np.zeros((4 * 4, 3), np.float32)
+                self.checker_sizes = (4, 4)
+
                 self.refined_corners = cv2.cornerSubPix(
                                 gray, corners, (11, 11), (-1, -1), criteria
                             )
+                print("self.refined_corners", self.refined_corners  )
 
                 _, self.rvecs, self.tvecs = cv2.solvePnP(objp, self.refined_corners, self.camera_matrix, self.dist)
             else:
                 print(" do not find ")
-
-                ############
-            # self.rvecs = np.array(self.rvecs)
-            # self.tvecs = np.array(self.tvecs)
         else:
             print("do not find all corners....")
             quit()
+
+####################                ############
+
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        for i in range(len(corners)):
+            print()
+            cv2.putText(self.img, f"{i}", tuple(map(int, (corners[i][0][0]-10, corners[i][0][1] -10))), font, 3, (255, 0, 0), 10)
+        
+        self.img = cv2.resize(self.img, (self.w//4, self.h//4))
+        cv2.imshow("img", self.img)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+
 #########################
     
 
@@ -105,6 +132,7 @@ class volumetric:
         size: 체스판의 크기
         """
         points = self.refined_corners
+
         size = self.checker_sizes
         if printer:
             print(size[0], size[1])
@@ -157,6 +185,7 @@ class volumetric:
 
         output -> vertex_resize : 꼭지점 좌표가 6개인 물체들의 좌표 리스트
         '''
+        
         gray = cv2.cvtColor(self.object_detected_img, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(gray, (3, 3), 0)   # (1, 1)을 홀수값 쌍으로 바꿀수 있음 3,3 5,5 7,7.... 조절해가며 contours 상자를 맞춰감
 
@@ -296,8 +325,9 @@ class volumetric:
             self.checker_sizes[0] - 1
         )
 
+        self.real_dist = self.markerLength * 100
         # 픽셀당 실제 거리 - check_real_dist(cm) / 1칸당 떨어진 픽셀 거리
-        pix_per_real_dist = self.check_real_dist / one_checker_per_pix_dis
+        pix_per_real_dist = self.real_dist / one_checker_per_pix_dis
 
         # 두 점 사이의 픽셀거리 * 1픽셀당 실제 거리 = 두 점의 실제 거리
         self.width = (
@@ -359,11 +389,11 @@ class volumetric:
         # 가로, 세로, 높이 출력
         print("가로길이 :",self.width)
         print("세로길이 :",self.vertical)
-        print("높이길이 :",self.height * self.check_real_dist)
-        print(f"{self.width: .2f} x {self.vertical: .2f} x {(self.height * self.check_real_dist): .2f}")
+        print("높이길이 :",self.height * self.real_dist)
+        print(f"{self.width: .2f} x {self.vertical: .2f} x {(self.height * self.real_dist): .2f}")
 
         # 가로세로 그리기
-        cv2.putText(self.img, f"width:{self.width: .2f} vertical: {self.vertical: .2f} height: {self.height*4}", (self.w//5, self.object_vertexes[2][1]+100), font, 3, (255, 0, 0), 10)
+        cv2.putText(self.img, f"width:{self.width: .2f} vertical: {self.vertical: .2f} height: {self.height*self.real_dist}", (self.w//5, self.object_vertexes[2][1]+100), font, 3, (255, 0, 0), 10)
 
         cv2.line(self.img,(self.object_vertexes[1]), (self.object_vertexes[2]), (0, 255, 0), 5, cv2.LINE_AA)
         cv2.line(self.img,(self.object_vertexes[2]), (self.object_vertexes[3]), (255, 0, 0), 5, cv2.LINE_AA)
@@ -382,13 +412,13 @@ class volumetric:
         cv2.destroyAllWindows()
 
 
-def main(image, markerLength):
-    a = volumetric(image, markerLength=markerLength)
+def main(image, markerLength, n_cluster):
+    a = volumetric(image, markerLength=markerLength, n_cluster=n_cluster)
     a.find_ArucoMarkers()
     a.remove_background()
-    # a.show_image(a.re_bg_img)
+    a.show_image(a.re_bg_img)
     a.find_checker_outer_points()
-    a.find_object_by_k_mean()
+    a.find_object_by_k_mean(visualize_object=True)
     a.find_vertex()
     a.find_object_vertex(printer=True)
     a.fix_vertex()
@@ -398,6 +428,7 @@ def main(image, markerLength):
     a.measure_height(printer=True)
     a.draw_image()
 
-for i in range(1, 9):
-    main(f"./charuco_image/hexagon_image{i}.jpg", markerLength=0.03 )
+
+for i in range(14, 16):
+    main(f"./charuco_image/hexagon_image{i}.jpg", markerLength=0.03, n_cluster=4 )
 
