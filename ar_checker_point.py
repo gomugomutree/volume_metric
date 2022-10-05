@@ -1,8 +1,10 @@
+from tkinter import Frame
 import numpy as np
 import glob, cv2
 from matplotlib import pyplot as plt
 import utils
 
+import timeit
 from rembg import remove
 
 class volumetric:
@@ -15,11 +17,20 @@ class volumetric:
         self.h = self.img.shape[0]
         self.w = self.img.shape[1]
 
+################
+        self.resize = 3
+        self.img = cv2.resize(self.img, (self.w //self.resize, self.h //self.resize))
+        self.h = self.img.shape[0]
+        self.w = self.img.shape[1]
+#######################
+
         self.npz_file = npz_file
         self.camera_matrix = np.array
         self.dist = np.array
         self.tvecs = np.array
-        self.re_bg_img = np.array # 
+        self.rvecs = np.array
+
+        self.re_bg_img = np.array #  
         self.refined_corners = np.array # 
         self.checker_sizes = tuple()
         self.outer_points1 = np.array
@@ -39,69 +50,13 @@ class volumetric:
     def set_image(self, image_address: str):
         self.img = cv2.imread(image_address)
     
-    def set_npz(self):
-        with np.load(self.npz_file) as X:
-            self.camera_matrix, self.dist, _, _ = [X[i] for i in ('mtx', 'dist', 'rvecs', 'tvecs')]
     # 배경 제거
     def remove_background(self):
         self.re_bg_img = remove(self.img)
 
     # 코너 사이즈, 보정 코너들, 회전 벡터, 변환 벡터
-    
-    def search_checkerboard_size(self): # image: np.ndarray, self.camera_matrix, dist: np.ndarray):
-        gray = cv2.cvtColor(self.re_bg_img, cv2.COLOR_BGR2GRAY)
-        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-        for i in range(7, 2, -1):
-            check_int = 0
-            for j in range(7, 2, -1):
-                ret, corners = cv2.findChessboardCorners(gray, (i, j), None)
-                if ret == True:
-                    objp = np.zeros((i * j, 3), np.float32)
-                    objp[:, :2] = np.mgrid[0:i, 0:j].T.reshape(-1, 2)
-                    self.checker_sizes = (i, j)
-                    print(self.checker_sizes)
-
-                    self.refined_corners = cv2.cornerSubPix(
-                        gray, corners, (11, 11), (-1, -1), criteria
-                    )
-
-                    # img = cv2.drawChessboardCorners(image, (i, j), refined_corners, ret)
-                    check_int = 1
-                    print(self.refined_corners, self.refined_corners.shape, type(self.refined_corners))
-                    print("corner is detected!!")
-                    break
-            if check_int == 1:
-                break
-        if check_int == 0:
-            return print("corner is not detected......")
-        ret, self.rvecs, self.tvecs = cv2.solvePnP(objp, self.refined_corners, self.camera_matrix, self.dist)
-
-        print(self.rvecs, self.tvecs)
-
-
-    def find_checker_outer_points(self, printer=False): #points: np.ndarray, size: tuple) -> np.ndarray:
-        """
-        points: cv2.cornerSubPix()에 의해 생성된 점들
-        size: 체스판의 크기
-        """
-        points = self.refined_corners
-        size = self.checker_sizes
-        if printer:
-            print(size[0], size[1])
-            print("0th", points[0][0])
-            print("1st", points[size[0] * (size[1] - 1)][0])
-            print("2nd", points[size[0] - 1][0])
-            print("3rd", points[(size[0] * (size[1] - 1)) + (size[0] - 1)][0])
-
-        self.outer_points1 =  np.float32(
-            [
-                points[0][0],
-                points[size[0] * (size[1] - 1)][0],
-                points[size[0] - 1][0],
-                points[(size[0] * (size[1] - 1)) + (size[0] - 1)][0],
-            ]
-        )
-
+    def set_npz_values(self):
+        self.camera_matrix, self.dist, self.rvecs, self.tvecs, self.outer_points1, self.checker_sizes = utils.read_npz(self.npz_file)
 
     def find_object_by_k_mean(self, visualize_object=False):
         """
@@ -116,7 +71,7 @@ class volumetric:
         twoDimage = np.float32(twoDimage)
 
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-        attempts=10
+        attempts=1
 
         _, label, center=cv2.kmeans(twoDimage, self.K, None, criteria, attempts, cv2.KMEANS_PP_CENTERS)
         center = np.uint8(center)
@@ -127,7 +82,7 @@ class volumetric:
         
         if visualize_object:
             result_img = cv2.resize(self.object_detected_img, (800, 800))
-            cv2.imshow("img", result_img)
+            cv2.imshow("result_img", result_img)
             cv2.waitKey(0)
 
 
@@ -144,6 +99,12 @@ class volumetric:
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
         dilate = cv2.erode(blurred, kernel, iterations =2)
 
+        # image = self.img.copy()
+        # image = cv2.resize(dilate, (self.w // 4, self.h // 4))
+        # cv2.imshow(f"image", image)
+        # cv2.waitKey()
+        # cv2.destroyAllWindows()
+
         # Find contours
         contours, _ = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE) # contours는 튜플로 묶인 3차원 array로 출력
 
@@ -154,8 +115,9 @@ class volumetric:
                 length = cv2.arcLength(cnt, True)
                 epsilon = eps * length
                 vertex = cv2.approxPolyDP(cnt, epsilon, True)
-                if len(vertex) == 6 and length > 1000:      # vertex가 6 -> 꼭짓점의 갯수
-                    
+
+                if len(vertex) == 6 and length > (1000//(self.resize**2))  :      # vertex가 6 -> 꼭짓점의 갯수
+                     
                     if printer:
                         image = self.img.copy()
                         cv2.drawContours(image,[vertex],0,(0,0,255),10)
@@ -236,20 +198,7 @@ class volumetric:
             [w + one_step * ((self.checker_sizes[0] - 1)), h], 
             [w + one_step * ((self.checker_sizes[0] - 1)), h + one_step * (self.checker_sizes[1] - 1)],]
         )
-        ###############
 
-        # 좌표를 펴서 정방향 이미지 좌표로 만든것
-
-        M = cv2.getPerspectiveTransform(self.outer_points1, self.outer_points2)
-
-        perspective_image = cv2.warpPerspective(self.img, M, (w * 3, h * 3))
-        
-        perspective_image = cv2.resize(perspective_image, (w // 4, h // 4))
-        cv2.imshow("perspective_image", perspective_image)
-        cv2.waitKey()
-        cv2.destroyAllWindows()
-
-######################
     # 투시 행렬 구하기
     def set_transform_matrix(self):
         self.transform_matrix = cv2.getPerspectiveTransform(self.outer_points1, self.outer_points2)
@@ -277,7 +226,7 @@ class volumetric:
         checker_points = checker_points.tolist()
         # 체커보드가 정방향으로 투시되었을때 각 좌표들을 다시 구해준다.
         for point in checker_points:
-            print("point",type(point))
+            # print("point",type(point))
             re_point.append(utils.transform_coordinate(self.transform_matrix, point))
 
         re_object_points = list()
@@ -322,7 +271,7 @@ class volumetric:
 
         # 두 점을 1으로 나눈 거리를 1칸 기준 (ckecker 사이즈에서 1 빼면 칸수)
         standard_ar_dist = abs(ar_start[0] - ar_second[0]) / (self.checker_sizes[0] - 1)  
-        
+
         # 실제세계의 기준 좌표를 기준으로 물체의 z축을 구할 바닥 좌표의 실제세계의 좌표를 구한다
         # x, y, z 값을 갖는다
         ar_object_real_coor = [
@@ -330,9 +279,6 @@ class volumetric:
             (ar_object_standard_z[1] - ar_start[1]) / standard_ar_dist,
             0,
         ]
-
-        ################
-        # print(self.camera_matrix.shape, self.rvecs.shape, self.tvecs.shape)    
 
         # pixel_coordinates 
         height_pixel = utils.pixel_coordinates(self.camera_matrix, self.rvecs, self.tvecs, ar_object_real_coor)
@@ -347,7 +293,14 @@ class volumetric:
             self.height = i
             if printer:
                 self.img = cv2.circle(self.img, tuple(list(map(int, height_pixel[:2]))), 5, (0, 0, 255), -1, cv2.LINE_AA)
-        
+
+###########################
+        print(self.object_vertexes[0])
+        real_xyz = utils.real_coordinates(self.camera_matrix, self.rvecs, self.tvecs, tuple(self.object_vertexes[0]))
+        print("real_xyz", real_xyz)
+
+############################
+
     def draw_image(self):
         font = cv2.FONT_HERSHEY_SIMPLEX
 
@@ -358,15 +311,19 @@ class volumetric:
         print(f"{self.width: .2f} x {self.vertical: .2f} x {(self.height * self.check_real_dist): .2f}")
 
         # 가로세로 그리기
-        cv2.putText(self.img, f"width:{self.width: .2f} vertical: {self.vertical: .2f} height: {self.height*4}", (self.w//5, self.object_vertexes[2][1]+100), font, 3, (255, 0, 0), 10)
+        cv2.putText(self.img, f"{self.width: .2f}" , (self.object_vertexes[1][0]- (self.object_vertexes[1][0]//3), self.object_vertexes[1][1]+((self.h-self.object_vertexes[1][1])//3)), font, 3, (0, 255, 0), 10)
+        cv2.putText(self.img, f"{self.vertical: .2f}" , (self.object_vertexes[3][0], self.object_vertexes[1][1]+((self.h-self.object_vertexes[3][1])//3)), font, 3, (255, 0, 0), 10)
+        cv2.putText(self.img, f"{(self.height*self.check_real_dist): .2f}" , (self.object_vertexes[0][0] - (self.object_vertexes[0][0]//2), (self.object_vertexes[0][1] + self.object_vertexes[1][1])//2), font, 3, (0, 0, 255), 10)
 
         cv2.line(self.img,(self.object_vertexes[1]), (self.object_vertexes[2]), (0, 255, 0), 5, cv2.LINE_AA)
         cv2.line(self.img,(self.object_vertexes[2]), (self.object_vertexes[3]), (255, 0, 0), 5, cv2.LINE_AA)
         # cv2.line(self.img,(self.object_vertexes[1]), (self.height_pixel), (255, 0, 0), 5, cv2.LINE_AA)
 
-        self.img = cv2.resize(self.img, (self.w // 4, self.h // 4))
+        cropped_img = self.img[self.h //3 : self.h, :]
+        h, w = cropped_img.shape[:2]
+        cropped_img = cv2.resize(cropped_img, (w // 1, h  // 1))
 
-        cv2.imshow("img", self.img)
+        cv2.imshow("img", cropped_img)
         cv2.waitKey()
         cv2.destroyAllWindows()
     
@@ -376,25 +333,58 @@ class volumetric:
         cv2.waitKey()
         cv2.destroyAllWindows()
 
-
-def main(image, npz, real_dist):
+#7. 전체
+def main(image, npz, real_dist, time_check=False, time_check_number=10):
     a = volumetric(image, npz, real_dist)
-    a.set_npz()
+    a.set_npz_values()
+    
+
+    # 1. 배경제거
     a.remove_background()
     # a.show_image(a.re_bg_img)
-    a.search_checkerboard_size()
-    a.find_checker_outer_points()
-    a.find_object_by_k_mean()
+    # 3. k-mean
+    a.find_object_by_k_mean(visualize_object=False)
+
+    # 4. 물체 꼭지점 찾기
     a.find_vertex()
-    a.find_object_vertex(printer=True)
+    a.find_object_vertex()
     a.fix_vertex()
+    
     a.trans_checker_stand_coor()
     a.set_transform_matrix()
+    
+    # 5. 가로세로 구하기
     a.measure_width_vertical()
+    
+    # 6. 높이 구하기
     a.measure_height(printer=True)
+    
     a.draw_image()
 
+    if time_check:
+        time_check_number = time_check_number
+        t1 = timeit.timeit(stmt=a.remove_background,number=time_check_number, setup="pass" )
+        t3 = timeit.timeit(stmt=a.find_object_by_k_mean,number=time_check_number, setup="pass" )
+        t4_1 = timeit.timeit(stmt=a.find_vertex,number=time_check_number, setup="pass" )
+        t4_2 = timeit.timeit(stmt=a.find_object_vertex,number=time_check_number, setup="pass" )
+        t4_3 = timeit.timeit(stmt=a.fix_vertex,number=time_check_number, setup="pass" )
+        t5 = timeit.timeit(stmt=a.measure_width_vertical,number=time_check_number, setup="pass" )
+        t6 = timeit.timeit(stmt=a.measure_height,number=time_check_number, setup="pass" )
 
-for i in range(4, 5):
-    main(f"./image/img{i}.jpg", "calibration3.npz", 4)
+        print(f"1: {t1/time_check_number} ")
+        print(f"3: {t3/time_check_number}  4: {t4_1+t4_2+t4_3/time_check_number}")
+        print(f"5: {t5/time_check_number}  6: {t6/time_check_number}")
+        print(f"7: {(t1 + t3 + t4_1+t4_2+t4_3 +t5+t6)/time_check_number}")
+# t7 = timeit.timeit(stmt=main,number=5 )
+
+
+for i in range(1, 7):
+    try:
+        main(f"./test_image/{i}.jpg", "checker_(8, 5).npz", 3, time_check=False, time_check_number=10)
+    except:
+        pass
+# images = glob.glob("./test_image/*.jpg")
+# for fname in images[15:]:
+#     print(fname)
+#     main(fname, "checker_(8, 5).npz", 3, time_check=False, time_check_number=10)
 

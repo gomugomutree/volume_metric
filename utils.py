@@ -130,7 +130,7 @@ def make_cheker_points(
     x_axis = (w * 3) // term
     y_axis = (h * 3) // term
 
-    print("x, y:", x_axis, y_axis)
+    # print("x, y:", x_axis, y_axis)
 
     # 4 사분면
     while start_y < (h * 3):
@@ -407,3 +407,39 @@ def change_aruco_to_checker_corners(corners: list)-> list:
         aruco_corners.append(cor[2:].tolist())
     
     return aruco_corners
+
+
+def real_coordinates(camera_mtx: np.ndarray, rvecs: np.ndarray, tvecs: np.ndarray, pixel_coor: tuple):
+    """
+    픽셀 값을 기반으로 해당 픽셀의 월드 좌표계를 구하는 함수
+    """
+    # Rodgigues notation으로 된 회전변환 행렬을 3x3 회전변환 행렬로 변환
+    rotation_mtx = cv2.Rodrigues(rvecs)
+    
+    # 찬수님이 만드신 calibration3.npz의 tvecs사용, npz파일의 tvecs는 차원이 하나 더 묶여 나와서 0번째를 추출
+    translation_mtx = tvecs
+    
+    # np.hstack으로 회전변환과 병진변환 행렬을 합쳐 [R|t]행렬 생성
+    # Rodrigues()를 쓰면 0번째로 회전변환 행렬, 1번째로 변환에 사용한 Jacobian행렬이 나오므로 0번째만 사용
+    R_t = np.hstack((rotation_mtx[0], translation_mtx))
+    
+    # 픽셀 좌표를 3x1행렬로 변환
+    pixel_coor = np.array(pixel_coor).reshape(-1,1)
+    
+    # 픽셀 좌표 마지막 행에 1을 추가
+    pixel_coor = np.vstack((pixel_coor, np.array([1])))
+    
+    # 실제 좌표계에서의 픽셀 좌표 연산
+    # R_t 행렬은 3x4여서 의사역행렬(pseudo inverse : np.pinv)로 구함
+    # camera_mtx는 3x3이여서 역행렬(inverse : np.inv)로 구함
+    real_coor = np.linalg.pinv(R_t) @ np.linalg.inv(camera_mtx) @ pixel_coor
+    
+    # 마지막 행을 1로 맞추기 위해 마지막 요소값으로 각 요소를 나눔
+    real_coor /= real_coor[-1]
+    
+    return real_coor[:3]        # 근삿값으로 출력이 됨
+
+def read_npz(npz_file):
+    with np.load(npz_file) as X:
+        camera_matrix, dist, rvecs, tvecs, outer_points, checker_size = [X[i] for i in ('mtx', 'dist', 'rvecs', 'tvecs', 'outer_points', 'checker_size')]
+    return camera_matrix, dist, rvecs, tvecs, outer_points, checker_size
