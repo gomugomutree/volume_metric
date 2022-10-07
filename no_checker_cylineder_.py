@@ -1,4 +1,6 @@
+import atexit
 from tkinter import Frame
+from turtle import circle
 import numpy as np
 import glob, cv2
 from matplotlib import pyplot as plt
@@ -125,7 +127,7 @@ class volumetric:
         self.vertexes = np.reshape(vertex_list, (-1, 6, 2))
         if len(self.vertexes) == 0:
             print("object vertexes are not detected....")
-            quit()      
+            quit() 
 
     def find_object_vertex(self, printer=False):
         """
@@ -325,6 +327,54 @@ class volumetric:
         cv2.imshow(f"image", image)
         cv2.waitKey()
         cv2.destroyAllWindows()
+    
+    def show_cylinder_standerd(self):
+        masked_contour, origin_contour = utils.get_contour(self.object_detected_img)
+        # print(np.min(masked_contour), np.max(masked_contour))
+
+        # print(cylinder_min, cylinder_max)
+
+        image = self.img.copy()
+        print(np.array(origin_contour).shape)
+        for oc in origin_contour[0]:
+            image = cv2.circle(image, tuple(oc[0]), 1, (0, 0, 255), -1, cv2.LINE_AA)
+
+        contr = origin_contour[0]
+
+        # 감싸는 사각형 표시(검정색)
+        x,y,w,h = cv2.boundingRect(contr)
+        cv2.rectangle(image, (x,y), (x+w, y+h), (0,0,0), 3)
+
+        # 최소한의 사각형 표시(초록색)
+        rect = cv2.minAreaRect(contr)
+        box = cv2.boxPoints(rect)   # 중심점과 각도를 4개의 꼭지점 좌표로 변환
+        box = np.int0(box)          # 정수로 변환
+        cv2.drawContours(image, [box], -1, (0,255,0), 3)
+
+        # 최소한의 원 표시(파랑색)
+        (x,y), radius = cv2.minEnclosingCircle(contr)
+        cv2.circle(image, (int(x), int(y)), int(radius), (255,0,0), 2)
+        
+
+        # 최소한의 삼각형 표시(분홍색)
+        ret, tri = cv2.minEnclosingTriangle(contr)
+        cv2.polylines(image, [np.int32(tri)], True, (255,0,255), 2)
+
+        # 최소한의 타원 표시(노랑색)
+        ellipse = cv2.fitEllipse(contr)
+        cv2.ellipse(image, ellipse, (0,255,255), 3)
+
+        image_re = cv2.warpPerspective(image, self.transform_matrix, (self.w *3, self.h*3))
+        image_re = image_re[self.h: self.h*3, 0: self.w*2]
+        image_re = cv2.resize(image_re, (self.w // 4 * self.resize, self.h // 4 * self.resize))
+
+        image = cv2.resize(image, (self.w // 4 * self.resize, self.h // 4 * self.resize))
+        
+        cv2.imshow(f"image_re", image_re)
+        cv2.imshow(f"image", image)
+        cv2.waitKey()
+        cv2.destroyAllWindows()
+
 
 #7. 전체
 def main(image, npz, real_dist, time_check=False, time_check_number=10, resize=1):
@@ -335,6 +385,7 @@ def main(image, npz, real_dist, time_check=False, time_check_number=10, resize=1
     # 1. 배경제거
     a.remove_background()
     # a.show_image(a.re_bg_img)
+
     # 3. k-mean
     a.find_object_by_k_mean(visualize_object=False)
 
@@ -346,6 +397,9 @@ def main(image, npz, real_dist, time_check=False, time_check_number=10, resize=1
     a.trans_checker_stand_coor()
     a.set_transform_matrix()
     
+  
+
+
     # 5. 가로세로 구하기
     a.measure_width_vertical()
     
@@ -354,6 +408,7 @@ def main(image, npz, real_dist, time_check=False, time_check_number=10, resize=1
     
     a.draw_image()
     a.show_image(a.img)
+    a.show_cylinder_standerd()
 
     if time_check:
         time_check_number = time_check_number
@@ -370,7 +425,6 @@ def main(image, npz, real_dist, time_check=False, time_check_number=10, resize=1
         print(f"5: {t5/time_check_number}  6: {t6/time_check_number}")
         print(f"7: {(t1 + t3 + t4_1+t4_2+t4_3 +t5+t6)/time_check_number}")
 
-# t7 = timeit.timeit(stmt=main,number=5 )
 
 # for i in range(1, 7):
 #     try:
@@ -381,24 +435,10 @@ def main(image, npz, real_dist, time_check=False, time_check_number=10, resize=1
 # for fname in images:
 #     print(fname)
 #     main(fname, "checker_(8, 5).npz", 3, time_check=False, time_check_number=10)
-
-# for i in range(4, 5):
-#     try:
-#         print(f"image{i}.jpg")
-#         # main(f"./aruco_calibration_image/image ({i}).jpg", "aruco_cs_(4, 4)_re_1_er_ 1.33.npz",  5, resize=1)
-#         main(f"./aruco_calibration_image/image ({i}).jpg", "aruco_cs_(4, 4)_re_2_er_ 0.67.npz",  5, resize=2)
-#         main(f"./aruco_calibration_image/image ({i}).jpg", "aruco_cs_(4, 4)_re_3_er_ 0.47.npz",  5, resize=3)
-#         main(f"./aruco_calibration_image/image ({i}).jpg", "aruco_cs_(4, 4)_re_4_er_ 0.35.npz",  5, resize=4)
-#         main(f"./aruco_calibration_image/image ({i}).jpg", "aruco_cs_(4, 4)_re_5_er_ 0.32.npz",  5, resize=5)
-#         main(f"./aruco_calibration_image/image ({i}).jpg", "aruco_cs_(4, 4)_re_6_er_ 0.32.npz",  5, resize=6)
-#     except:
-#         pass
-
-
-
-# for i in range(4, 5):
-#     try:
-#         print(f"image{i}.jpg")
-#         main(f"./aruco_calibration_image/image ({i}).jpg", "aruco_cs_(4, 4)_re_6_er_ 0.32.npz",  5, resize=6)
-#     except:
-#         pass
+for i in range(1, 8):
+    try:
+        print(f"image{i}.jpg")
+        main(f"./aruco_calibration_image/circle ({i}).jpg", "./aruco_calibration_image/aruco_cs_(4, 4)_re_4_er_ 0.35.npz",  5, resize=4)
+        # main(f"./aruco_calibration_image/image ({i}).jpg", "./aruco_calibration_image/aruco_cs_(4, 4)_re_4_er_ 0.35.npz",  5, resize=4)
+    except:
+        pass

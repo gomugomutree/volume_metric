@@ -448,3 +448,32 @@ def read_npz(npz_file):
     with np.load(npz_file) as X:
         camera_matrix, dist, rvecs, tvecs, outer_points, checker_size = [X[i] for i in ('mtx', 'dist', 'rvecs', 'tvecs', 'outer_points', 'checker_size')]
     return camera_matrix, dist, rvecs, tvecs, outer_points, checker_size
+
+
+
+
+
+def get_contour(image: np.ndarray) -> tuple:
+    """
+    외곽선 이미지를 출력할 수 있는 함수
+    마스크된 이미지(검은 바탕에 하얀 물체)와 외곽선 정보를 묶어 튜플로 반환
+    외곽선 정보는 추후 꼭짓점을 구할 때 사용
+    """
+    image = image.copy()
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+    
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    dilate = cv2.dilate(blurred, kernel, iterations = 2)
+    
+    origin_contour, hier = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    print('original contour image shape: ', np.array(origin_contour).shape)
+    
+    mask = np.zeros(image.shape).astype(image.dtype)
+    
+    color = [255,255,255]
+    
+    masked_contour = cv2.fillPoly(mask, origin_contour, color)
+    print('masked contour image shape: ', np.array(masked_contour).shape)
+    
+    return (masked_contour, origin_contour)
