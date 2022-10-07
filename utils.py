@@ -342,45 +342,23 @@ def pixel_coordinates(
     return pixel_coor[:2]
 
 
-
-def sort_aruco_maker(corner:np.array) -> list:
-    """
-    aruco 회전해서 순서가 변하더라도 화면상에 일정한 순서로 다시 정렬해주는 함수
-    center를 기준으로 4사분면을 만들고 그것을 기준을 정리해준다.
-    corner : np.array ( 4개의 꼭지점 좌표)
-    """
-    center = np.mean(corner, axis=0)
-    sorted_corner_list = [[]] * 4
-    sort_standard_list = (corner < center).tolist()
-    corner = corner.tolist()
-
-    for sort_, cor in zip(sort_standard_list, corner):
-        if sort_ == [True, True]:
-            sorted_corner_list[0] = cor
-        elif sort_  == [False, True]:
-            sorted_corner_list[1] = cor
-        elif sort_  == [True, False]:
-            sorted_corner_list[2] = cor
-        elif sort_  == [False, False]:
-            sorted_corner_list[3] = cor
-
-    return sorted_corner_list
-
-def sort_aruco_marker(corners:np.array) -> list :
+def sort_aruco_marker(corners:np.array, marker_count=4) -> list :
     """
     aruco 마커의 고유 번호대로 순서가 정렬되는데 이것을 원하는 순서대로 정렬해주는 함수
     corners : (4, 4, 2) np.array 행렬
     sorted_aruco_marker_list : (4, ) list 안에 4개의 array가 들어있음 [array([[1061., 2302.]]), array ......, ]
     """
 
-    corners = np.array(corners)
-    center = np.mean(corners[:, 0], axis=0)
+    # corners = np.array(corners)
+    # center = np.mean(corners[:, 0], axis=0)
+    center = np.mean(corners, axis=0)
 
-    sorted_aruco_marker_list = [[]] * 4
+    sorted_aruco_marker_list = [[]] * marker_count
 
-    for idx, cor in enumerate(corners[:, 0]):
+    # for idx, cor in enumerate(corners[:, 0]):
+    for idx, cor in enumerate(corners):
         sort_  = (cor < center).tolist()
-        
+
         if sort_ == [True, True]:
             sorted_aruco_marker_list[0] = corners[idx]
         elif sort_  == [False, True]:
@@ -390,9 +368,36 @@ def sort_aruco_marker(corners:np.array) -> list :
         elif sort_  == [False, False]:
             sorted_aruco_marker_list[3] = corners[idx]
 
-    return sorted_aruco_marker_list
+    return np.array(sorted_aruco_marker_list)
 
-def change_aruco_to_checker_corners(corners: list)-> list:
+def sort_each_aruco_markers(corners:np.array, marker_count:int) -> list :
+    """
+    aruco 마커의 고유 번호대로 순서가 정렬되는데 이것을 원하는 순서대로 정렬해주는 함수
+    corners : (4, 4, 2) np.array 행렬
+    sorted_aruco_marker_list : (4, ) list 안에 4개의 array가 들어있음 [array([[1061., 2302.]]), array ......, ]
+    """
+
+    corners = np.array(corners)
+    center = np.mean(corners[:, 0], axis=0)
+    sorted_aruco_marker_list = [[]] * marker_count
+
+    # for idx, cor in enumerate(corners[:, 0]):
+    for idx, cor in enumerate(corners):
+        sort_  = (cor[0] < center).tolist()
+
+        if sort_ == [True, True]:
+            sorted_aruco_marker_list[0] = corners[idx]
+        elif sort_  == [False, True]:
+            sorted_aruco_marker_list[1] = corners[idx]
+        elif sort_  == [True, False]:
+            sorted_aruco_marker_list[2] = corners[idx]
+        elif sort_  == [False, False]:
+            sorted_aruco_marker_list[3] = corners[idx]
+
+    return np.array(sorted_aruco_marker_list)
+
+
+def change_aruco_to_checker_corners(corners: np.array)-> list:
     
     aruco_corners = list()
 

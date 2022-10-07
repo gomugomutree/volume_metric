@@ -11,7 +11,6 @@ def find_checker_outer_points(refined_corners: np.array, checker_sizes: tuple, p
     points = refined_corners
     size = checker_sizes
         
-
     outer_points =  np.float32(
         [
             points[0][0],
@@ -29,11 +28,10 @@ def find_checker_outer_points(refined_corners: np.array, checker_sizes: tuple, p
 
     return outer_points
 
-
 if __name__ == "__main__":
-    images = glob.glob("./calibration_image_(8,5)_3cm/*.jpg")
+    # images = glob.glob("./calibration_image_(8,5)_3cm/*.jpg")
     # images = glob.glob("./3cm Calibration/*.jpg")
-    # images = glob.glob("./temp/*.jpg")
+    images = glob.glob("./charuco_image/*.jpg")
 
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 1000, 0.00001)
     # criteria = (cv2.TERM_CRITERIA_EPS, 30, 0.00001)
@@ -41,11 +39,11 @@ if __name__ == "__main__":
     objpoints = []
 
     i,j = (8, 5)
-
+    resize = 4
     for fname in images:
         img = cv2.imread(fname)
         h, w = img.shape[:2]
-        img = cv2.resize(img, (w//3, h//3))
+        img = cv2.resize(img, (w//resize, h//resize))
 
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
@@ -101,40 +99,3 @@ if __name__ == "__main__":
 
 
 
-
-0.28563495562675
-0.32216123792590384
-0.5178627760983673
-0.3092883737381872
-0.35554479674380673
-0.23183887735618275
-0.19502164896138524
-0.24188670227459724
-0.3402439015476595
-0.36964917466555125
-0.3703677893496522
-0.3494062634750341
-0.31451334017108706
-0.2692893009926641
-0.11915068220464457
-0.10336177938916428
-0.08276727103112837
-0.1281207567695702
-0.28228407570368774
-0.25019337415502696
-0.23888623792974814
-0.23981950358771642
-0.22225851900973786
-0.49238606341549274
-0.49904753263949553
-0.38256493560574156
-0.22902770730704008
-0.41756427547848196
-0.5095827545138516
-0.2926663035165059
-0.5205023530359306
-0.3812071759813982
-0.1778036641926526
-0.1693383246818522
-0.2759866770994819
-0.45035234427064214

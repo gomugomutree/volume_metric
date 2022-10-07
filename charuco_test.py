@@ -19,6 +19,14 @@ class volumetric:
         self.h = self.img.shape[0]
         self.w = self.img.shape[1]
 
+################
+        self.resize = 4
+        self.img = cv2.resize(self.img, (self.w //self.resize, self.h //self.resize))
+        self.h = self.img.shape[0]
+        self.w = self.img.shape[1]
+#######################
+
+
         self.camera_matrix = np.array
         self.dist = np.array
         self.tvecs = np.array
@@ -41,9 +49,12 @@ class volumetric:
 
         self.height_pixel = np.array
         self.pix_per_real_dist = float
+
     def set_image(self, image_address: str):
         self.img = cv2.imread(image_address)
     
+    def set_npz_values(self):
+        self.camera_matrix, self.dist, self.rvecs, self.tvecs, _, self.checker_sizes = utils.read_npz(self.npz_file)
 
     def remove_background(self):
         self.re_bg_img = remove(self.img)
@@ -113,6 +124,11 @@ class volumetric:
                                 gray, corners, (11, 11), (-1, -1), criteria
                             )
                 # print("self.refined_corners", self.refined_corners  )
+########################
+                self.camera_matrix, self.dist, self.rvecs, self.tvecs, self.outer_points1, self.checker_sizes = utils.read_npz("aruco_(4, 4).npz")
+
+
+#########################
 
                 _, self.rvecs, self.tvecs = cv2.solvePnP(objp, self.refined_corners, self.camera_matrix, self.dist)
                 print("rvec, tvec", self.rvecs, self.tvecs )
@@ -204,8 +220,8 @@ class volumetric:
                     
                     if printer:
                         image = self.img.copy()
-                        cv2.drawContours(image,[vertex],0,(0,0,255),10)
-                        image = cv2.resize(image, (self.w // 4, self.h // 4))
+                        cv2.drawContours(image,[vertex],0,(0,0,255),2)
+                        image = cv2.resize(image, (self.w // 2, self.h // 2))
                         cv2.imshow(f"image", image)
                         cv2.waitKey()
                         cv2.destroyAllWindows()
@@ -309,7 +325,6 @@ class volumetric:
         checker_points = checker_points.tolist()
         # 체커보드가 정방향으로 투시되었을때 각 좌표들을 다시 구해준다.
         for point in checker_points:
-            print("point",type(point))
             re_point.append(utils.transform_coordinate(self.transform_matrix, point))
 
         re_object_points = list()
@@ -346,7 +361,7 @@ class volumetric:
         #img: np.array, pts1: np.array, object_vertexes: np.array, checker_sizes: tuple, 
         # mat: np.array, camera_matrix: np.array, rvecs: np.array, tvecs: np.array) -> int:
 
-        print("self.outer_points2", self.outer_points2)
+        # print("self.outer_points2", self.outer_points2)
 
         pts1 = self.outer_points1.tolist()
         ar_start = utils.transform_coordinate(self.transform_matrix, pts1[0])
@@ -360,8 +375,6 @@ class volumetric:
         # 두 점을 1으로 나눈 거리를 1칸 기준 (ckecker 사이즈에서 1 빼면 칸수)
         standard_ar_dist = abs(ar_start[0] - ar_second[0]) / (self.checker_sizes[0] - 1)  
 
-
-
         # 실제세계의 기준 좌표를 기준으로 물체의 z축을 구할 바닥 좌표의 실제세계의 좌표를 구한다
         # x, y, z 값을 갖는다
         ar_object_real_coor = [
@@ -372,16 +385,16 @@ class volumetric:
 
         height_pixel = utils.pixel_coordinates(self.camera_matrix, self.rvecs, self.tvecs, ar_object_real_coor)
         
-        #######
-        ar_object_real_coor = [-0.3, -4, 0]
-        temp = utils.pixel_coordinates(self.camera_matrix, self.rvecs, self.tvecs, ar_object_real_coor)
-        # self.img = cv2.circle(self.img, tuple(list(map(int, temp[:2]))), 11, (0, 0, 255), -1, cv2.LINE_AA)
+  ##################      #######
+        # ar_object_real_coor = [-0.3, -4, 0]
+        # temp = utils.pixel_coordinates(self.camera_matrix, self.rvecs, self.tvecs, ar_object_real_coor)
+        # # self.img = cv2.circle(self.img, tuple(list(map(int, temp[:2]))), 11, (0, 0, 255), -1, cv2.LINE_AA)
 
 
-        print("ar_object_real_coor", ar_object_real_coor)
-        print("height_pixel", height_pixel)
-        self.img = cv2.circle(self.img, tuple(list(map(int, height_pixel[:2]))), 5, (0, 0, 255), -1, cv2.LINE_AA)
-        ############
+        # print("ar_object_real_coor", ar_object_real_coor)
+        # print("height_pixel", height_pixel)
+        # self.img = cv2.circle(self.img, tuple(list(map(int, height_pixel[:2]))), 5, (0, 0, 255), -1, cv2.LINE_AA)
+ #######       ############
         
         # y축으로 비교해서 z 수치가 증가하다가 물체 높이보다 높아지면 break
         for i in np.arange(0, 10, 0.01):
@@ -393,7 +406,7 @@ class volumetric:
             )
             self.height = i
             if printer:
-                self.img = cv2.circle(self.img, tuple(list(map(int, height_pixel[:2]))), 5, (0, 0, 255), -1, cv2.LINE_AA)
+                self.img = cv2.circle(self.img, tuple(list(map(int, height_pixel[:2]))), 1, (0, 0, 255), -1, cv2.LINE_AA)
         
     def draw_image(self):
         font = cv2.FONT_HERSHEY_SIMPLEX
@@ -405,13 +418,15 @@ class volumetric:
         print(f"{self.width: .2f} x {self.vertical: .2f} x {(self.height * self.real_dist): .2f}")
 
         # 가로세로 그리기
-        cv2.putText(self.img, f"width:{self.width: .2f} vertical: {self.vertical: .2f} height: {(self.height * self.real_dist): .2f}", (self.w//5, self.object_vertexes[2][1]+100), font, 3, (255, 0, 0), 10)
+        cv2.putText(self.img, f"{self.width: .2f}" , (self.object_vertexes[1][0]- (self.object_vertexes[1][0]//3), self.object_vertexes[1][1]+((self.h-self.object_vertexes[1][1])//3)), font, (3/self.resize) , (0, 255, 0), (10//self.resize ))
+        cv2.putText(self.img, f"{self.vertical: .2f}" , (self.object_vertexes[3][0], self.object_vertexes[1][1]+((self.h-self.object_vertexes[3][1])//3)), font, (3/self.resize) , (255, 0, 0), (10//self.resize ))
+        cv2.putText(self.img, f"{(self.height*self.real_dist): .2f}" , (self.object_vertexes[0][0] - (self.object_vertexes[0][0]//2), (self.object_vertexes[0][1] + self.object_vertexes[1][1])//2), font, (3/self.resize) , (0, 0, 255), (10//self.resize ))
 
-        cv2.line(self.img,(self.object_vertexes[1]), (self.object_vertexes[2]), (0, 255, 0), 5, cv2.LINE_AA)
-        cv2.line(self.img,(self.object_vertexes[2]), (self.object_vertexes[3]), (255, 0, 0), 5, cv2.LINE_AA)
+        cv2.line(self.img,(self.object_vertexes[1]), (self.object_vertexes[2]), (0, 255, 0), (10//self.resize), cv2.LINE_AA)
+        cv2.line(self.img,(self.object_vertexes[2]), (self.object_vertexes[3]), (255, 0, 0), (10//self.resize), cv2.LINE_AA)
         # cv2.line(self.img,(self.object_vertexes[1]), (self.height_pixel), (255, 0, 0), 5, cv2.LINE_AA)
 
-        self.img = cv2.resize(self.img, (self.w // 4, self.h // 4))
+        self.img = cv2.resize(self.img, (self.w // 2, self.h // 2))
 
         cv2.imshow("img", self.img)
         cv2.waitKey()
@@ -427,11 +442,13 @@ class volumetric:
 def main(image, markerLength, n_cluster):
     a = volumetric(image, markerLength=markerLength, n_cluster=n_cluster)
     a.find_ArucoMarkers()
+    # a.set_npz_values()
+
     a.remove_background()
     # a.show_image(a.re_bg_img)
     a.find_checker_outer_points()
     a.find_object_by_k_mean(visualize_object=False)
-    a.find_vertex()
+    a.find_vertex(printer=True)
     a.find_object_vertex(printer=False)
     a.fix_vertex()
     a.trans_checker_stand_coor()
@@ -441,6 +458,21 @@ def main(image, markerLength, n_cluster):
     a.draw_image()
 
 
-for i in range(14, 16):
-    main(f"./charuco_image/hexagon_image{i}.jpg", markerLength=0.036, n_cluster=4 )
+# for i in range(13, 15):
+#     try:
+#         print(f"hexagon_image{i}.jpg")
+#         main(f"./charuco_image/hexagon_image{i}.jpg", markerLength=0.036, n_cluster=4 )
+#     except:
+#         pass
 
+
+for i in range(1, 5):
+    # try:
+        print(f"image{i}.jpg")
+        main(f"./aruco_calibration_image/image ({i}).jpg", markerLength=0.05, n_cluster=4 )
+    # except:
+    #     pass
+
+
+# 4.5 10 15.4  mouse
+# 5  9.3 16.8  iphone
